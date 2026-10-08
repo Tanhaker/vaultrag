@@ -36,6 +36,9 @@ for (const dept of DEPTS) {
       semester: [1, 3, 5, 7][Math.floor(r() * 4)], cgpa: Math.round((5.5 + r() * 4.3) * 100) / 100,
       attendance_pct: Math.round((58 + r() * 40) * 10) / 10, user_email: linked?.email ?? null,
     });
+    // Keep the demo students consistent with their record cards in corpus.ts.
+    if (linked === PERSONAS[0]) Object.assign(STUDENTS[STUDENTS.length - 1], { semester: 5, cgpa: 8.42, attendance_pct: 81.5 });
+    if (linked === PERSONAS[1]) Object.assign(STUDENTS[STUDENTS.length - 1], { semester: 5, cgpa: 8.91, attendance_pct: 88.0 });
     const roll = r();
     const status = linked === PERSONAS[0] ? "partial" : linked === PERSONAS[1] ? "paid" : roll < 0.6 ? "paid" : roll < 0.8 ? "partial" : roll < 0.92 ? "pending" : "overdue";
     const due = FEE[dept];
