@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+/* Archive-paper palette: warm neutrals from one hue family, one accent (bottle green),
+   and muted status colours used only for meaning (classification, deny, warn). */
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+
+  --color-bg: #f2eee5;
+  --color-panel: #faf8f3;
+  --color-panel-2: #ebe6da;
+  --color-line: #dfd8ca;
+  --color-line-2: #cdc4b2;
+  --color-ink: #1d1b17;
+  --color-ink-2: #4b463d;
+  --color-ink-3: #847c6e;
+  --color-paper: #fffdf8;
+
+  --color-brand: #24543f;
+  --color-brand-2: #1a3f2f;
+  --color-brand-soft: #e2ebe3;
+  --color-deny: #a93f2c;
+  --color-warn: #9a6512;
+  --color-mark: #f1d58f;
+
+  --color-cls-0: #7a7366;
+  --color-cls-1: #3f5a73;
+  --color-cls-2: #9a6512;
+  --color-cls-3: #a93f2c;
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 1px 2px rgba(64, 48, 24, 0.06), 0 12px 32px -18px rgba(64, 48, 24, 0.22);
+  --shadow-float: 0 2px 6px rgba(64, 48, 24, 0.08), 0 24px 60px -24px rgba(64, 48, 24, 0.35);
+}
+
+html,
+body,
+#root {
+  min-height: 100dvh;
+  height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* Paper grain: a fixed noise layer so large surfaces don't read as flat digital fills. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.42  0 0 0 0 0.36  0 0 0 0 0.27  0 0 0 0.09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+h1,
+h2,
+h3,
+p {
+  text-wrap: pretty;
+}
+
+::selection {
+  background: var(--color-mark);
+  color: var(--color-ink);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-2) transparent;
+}
+
+.lucide {
+  stroke-width: 1.75;
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5ch;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--color-brand);
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-up {
+  animation: fade-up 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.stagger > * {
+  animation: fade-up 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+.stagger > *:nth-child(7) { animation-delay: 360ms; }
+.stagger > *:nth-child(8) { animation-delay: 420ms; }
+
+/* Ruled-paper backdrop for the login hero. */
+.ruled {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    color-mix(in oklab, var(--color-line) 70%, transparent) 31px,
+    color-mix(in oklab, var(--color-line) 70%, transparent) 32px
+  );
+}
