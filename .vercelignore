@@ -13,3 +13,6 @@ backend/pytest.ini
 docker-compose.yml
 **/__pycache__/
 **/.pytest_cache/
+.agents/
+.claude/
+skills-lock.json

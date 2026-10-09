@@ -13,3 +13,8 @@ eval/results/*.json
 
 .vercel
 .env*
+
+# Agent skills installed by the Neon integration (tooling, not part of the app)
+.agents/
+.claude/
+skills-lock.json

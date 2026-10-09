@@ -45,7 +45,8 @@ def hash_embed(text: str, dim: int | None = None) -> list[float]:
 
 async def embed_documents(texts: list[str]) -> list[list[float]]:
     if provider() == "gemini":
-        vecs = await gemini.embed(texts, "RETRIEVAL_DOCUMENT", get_settings().embedding_dim)
+        s = get_settings()
+        vecs = await gemini.embed(texts, "RETRIEVAL_DOCUMENT", s.embedding_dim, wait_budget=s.embed_wait_seconds)
         return [_normalise(v) for v in vecs]
     return [hash_embed(t) for t in texts]
 

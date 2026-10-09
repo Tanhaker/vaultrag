@@ -16,7 +16,7 @@ from ..config import get_settings
 from ..db import secure_session, writer_session
 from ..models import UserCtx
 from . import sql as sqlmod
-from .retrieve import coverage, hybrid, relevant, terms
+from .retrieve import answerable, coverage, hybrid, relevant, terms
 from .verify import verify
 
 REFUSAL = llm.REFUSAL
@@ -219,15 +219,30 @@ async def _sql_answer(user: UserCtx, question: str, timer: Timer) -> dict | None
     return out
 
 
+async def _kb_version(user: UserCtx) -> int | None:
+    """The tenant's knowledge-base version, bumped by a trigger on every document change. Part of
+    the cache key, so revocations reach every instance (serverless ones share no memory)."""
+    try:
+        async with secure_session(user) as conn:
+            row = await (await conn.execute("SELECT version FROM kb_version")).fetchone()
+        return row["version"] if row else 0
+    except Exception:
+        return None  # unknown: don't read or write the cache
+
+
 async def run(user: UserCtx, question: str) -> dict:
     question = question.strip()[:500]
     normalised = re.sub(r"\s+", " ", question.lower())
-    key = f"{fingerprint(user)}:{normalised}"
-    hit = _cache.get(key)
+    kbv = await _kb_version(user)
+    key = f"{fingerprint(user)}:{kbv}:{normalised}" if kbv is not None else None
+    hit = _cache.get(key) if key else None
     if hit and time.time() - hit[0] < CACHE_TTL:
         out = json.loads(json.dumps(hit[1]))
         out["id"], out["at"] = str(uuid.uuid4()), dt.datetime.now(dt.timezone.utc).isoformat()
-        out["steps"] = [{"key": "cache", "label": "ACL-scoped cache hit", "detail": f"key = question + ACL fingerprint {fingerprint(user)[:8]}", "ms": 1}] + out["steps"]
+        out["steps"] = [{"key": "cache", "label": "ACL-scoped cache hit",
+                         "detail": f"key = question + ACL fingerprint {fingerprint(user)[:8]} + KB v{kbv}", "ms": 1}] + out["steps"]
+        await _audit(user, question, [c["chunk"]["id"] for c in out["citations"]], 1,
+                     {"mode": out["mode"], "refused": out["refused"], "cache": True})
         return out
 
     s = get_settings()
@@ -237,7 +252,8 @@ async def run(user: UserCtx, question: str) -> dict:
     if sqlmod.is_structured(question):
         res = await _sql_answer(user, question, timer)
         if res:
-            _cache[key] = (time.time(), res)
+            if key:
+                _cache[key] = (time.time(), res)
             return res
 
     qvec = await embeddings.embed_query(question)
@@ -261,6 +277,13 @@ async def run(user: UserCtx, question: str) -> dict:
     sources = [{"n": i + 1, "title": c["title"], "text": c["content"]} for i, c in enumerate(usable)]
     sentences: list[dict] = []
     mode = "llm"
+
+    def compose_without_llm() -> tuple[list[dict], list[dict], list[dict]]:
+        # No model to judge the sources, so only chunks that clearly answer the question are quoted.
+        strict = [c for c in usable if answerable(c, semantic)]
+        return strict, [{"n": i + 1, "title": c["title"], "text": c["content"]} for i, c in enumerate(strict)], \
+            (extractive(question, strict) if strict else [])
+
     if usable:
         if s.llm_enabled:
             try:
@@ -268,13 +291,16 @@ async def run(user: UserCtx, question: str) -> dict:
                 if not out.get("insufficient"):
                     sentences = [{"text": x["text"].strip(), "cites": [int(n) for n in x.get("citations", [])]}
                                  for x in out.get("sentences", []) if x.get("text", "").strip()]
-                timer.step("gen", "Generate with citations", f"{s.llm_model} · {len(sentences)} sentences"
+                timer.step("gen", "Generate with citations", f"{gemini.last_model() or s.llm_model} · {len(sentences)} sentences"
                            + (" · model judged sources insufficient" if out.get("insufficient") else ""))
             except gemini.LLMUnavailable as e:
-                sentences, mode = extractive(question, usable), "extractive"
-                timer.step("gen", "Generate with citations", f"LLM unavailable ({str(e)[:40]}) → extractive composer")
+                usable, sources, sentences = compose_without_llm()
+                mode = "extractive"
+                timer.step("gen", "Generate with citations",
+                           f"LLM unavailable ({str(e)[:40]}) → extractive composer · {len(usable)} answerable")
         else:
-            sentences, mode = extractive(question, usable), "extractive"
+            usable, sources, sentences = compose_without_llm()
+            mode = "extractive"
             timer.step("gen", "Generate with citations", f"extractive composer · {len(sentences)} sentences")
     else:
         timer.step("gen", "Generate with citations", "insufficient evidence → refuse")
@@ -307,5 +333,6 @@ async def run(user: UserCtx, question: str) -> dict:
     out = _finish(user, question, timer, sentences, citations, quarantined, xray, mode)
     await _audit(user, question, [c["chunk"]["id"] for c in citations], out["latencyMs"],
                  {"mode": out["mode"], "refused": out["refused"], "filtered": xray["filtered"]})
-    _cache[key] = (time.time(), out)
+    if key:
+        _cache[key] = (time.time(), out)
     return out

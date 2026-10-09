@@ -2,6 +2,8 @@
 
 Code Carnival 2026, Atmiya University · PS-01 · Team **FriendlyFire** (TXJ8): Bhakti Kareliya (team leader), Tanmay Gajjar.
 
+**Live demo:** https://vaultrag-nine.vercel.app (fictional data; demo accounts below)
+
 VaultRAG answers natural-language questions over PDFs, scanned pages, photographed notices and
 database records. Access control is enforced **inside Postgres, on the same statement that runs the
 vector search**, so application code cannot leak a document the caller isn't cleared for: the
@@ -20,8 +22,14 @@ cd frontend && npm install && npm run dev               # http://localhost:5173 
 ```
 
 Without a Gemini key the pipeline still runs end to end: deterministic hash embeddings, Tesseract
-OCR and an extractive answer composer. With a key it uses Gemini embeddings (768-d), Gemini
+OCR and an extractive answer composer. With a key it uses `gemini-embedding-001` (768-d), Gemini
 generation with JSON-schema citations, an LLM entailment verifier and Gemini vision OCR.
+
+Generation walks a model chain (`LLM_MODEL`, then `LLM_FALLBACK_MODELS`, default
+`gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemini-3.5-flash` → …). Free-tier quotas are per
+model, so a 429 parks that model until Google's `retryDelay` and the next one answers. When every
+model is out of quota the extractive composer takes over behind a stricter relevance gate
+(calibrated with `python -m bench.relevance_probe`), so the answer degrades but never leaks.
 
 ### Demo accounts (password `Demo@123` for all, fictional data)
 
@@ -91,8 +99,8 @@ JWT (verified) ──► UserCtx ──► BEGIN READ ONLY
 
 | | Result |
 |---|---|
-| pytest | 99 passed: RLS matrix, forged/expired/escalated contexts, pooling, privileges, units |
-| Red-team suite (end-to-end through the API) | 12/12 attacks blocked, 0 canaries leaked |
+| pytest | 100 passed: RLS matrix, forged/expired/escalated contexts, pooling, privileges, units |
+| Red-team suite (end-to-end through the API) | 13/13 attacks blocked, 0 canaries leaked |
 | Recall@10, public-only user, 10k vectors | 5% post-filter in app code · 17% RLS strict scan · **87% RLS + iterative scan** |
 | p95 RLS-filtered HNSW query | 16 ms |
 
@@ -101,7 +109,28 @@ JWT (verified) ──► UserCtx ──► BEGIN READ ONLY
 `vercel.json` builds the frontend to static files and serves `api/index.py` (FastAPI, mounted at
 `/api`) as a Python function. The database is Neon Postgres with pgvector; the function connects
 per request through Neon's pooler. Migrations, seeding and ingestion run from a workstation with
-`DATABASE_URL` pointing at Neon (`python -m app.cli migrate | seed | ingest-demo`).
+`DATABASE_URL` pointing at Neon's direct (unpooled) endpoint. `.env.neon` (gitignored) holds that owner URL
+plus the same secrets the Vercel project has:
+
+```bash
+docker exec --env-file .env.neon vaultrag-api-1 python -m app.cli migrate
+docker exec --env-file .env.neon vaultrag-api-1 python -m app.cli seed
+docker exec -e EMBED_WAIT_SECONDS=900 --env-file .env.neon vaultrag-api-1 python -m app.cli ingest-demo
+docker exec --env-file .env.neon vaultrag-api-1 python -m bench.live_check https://vaultrag-nine.vercel.app
+```
+
+Vercel needs `DATABASE_URL` (added by the Neon integration), `DB_READER_PASSWORD`,
+`DB_WRITER_PASSWORD`, `JWT_SECRET`, `CTX_HMAC_SECRET` (the same values the migration used, since
+`app_ctx()` verifies the HMAC with the key stored in Postgres), `GEMINI_API_KEY`, `DEMO_MODE` and
+`MAX_UPLOAD_MB=4` (function request bodies are capped at 4.5 MB).
+
+Managed-Postgres notes:
+- Neon's owner role (`neondb_owner`) is not a superuser but has `BYPASSRLS`. Requests never use it:
+  every query runs as `rag_reader`/`rag_writer`, which have neither. The `employees_secure` view
+  does its own row scoping and column masking, so it is correct whoever owns it.
+- Serverless instances share no memory, so the answer cache is keyed on a per-tenant
+  knowledge-base version that a trigger bumps on every document change (`007_kb_version.sql`).
+  Revoking access takes effect on the next request on every instance (red-team attack 13).
 
 ## Layout
 

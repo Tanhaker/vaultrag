@@ -116,3 +116,16 @@ def relevant(c: dict, qterms_n: int, semantic: bool) -> bool:
     if qterms_n == 0:
         return False
     return f["coverage"] >= 0.5 or (semantic and f["sim"] >= 0.60 and f["coverage"] >= 0.25)
+
+
+def answerable(c: dict, semantic: bool) -> bool:
+    """Stricter gate for the extractive composer, which has no model to judge whether a source
+    actually answers the question. Calibrated on gemini-embedding-001 with bench/relevance_probe.py:
+    unrelated chunks score ~0.48-0.55, same-topic-but-wrong ones 0.60-0.72 ("Mars campus budget" ->
+    a real budget at 0.71), real answers 0.73-0.83 with full term coverage."""
+    f = c["features"]
+    if not semantic:
+        return f["coverage"] >= 0.5
+    return (f["sim"] >= 0.78
+            or (f["coverage"] >= 0.5 and f["sim"] >= 0.60)
+            or (f["coverage"] >= 0.4 and f["sim"] >= 0.66))

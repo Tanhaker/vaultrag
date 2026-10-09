@@ -2,6 +2,7 @@ from functools import lru_cache
 from uuid import UUID
 
 from psycopg.conninfo import conninfo_to_dict
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,14 +33,25 @@ class Settings(BaseSettings):
 
     # AI. Provider "auto" uses Gemini when a key is present and falls back to local/extractive paths.
     gemini_api_key: str = ""
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3.5-flash-lite"
+    # Tried in order when the previous model is rate limited or unavailable (quotas are per model).
+    llm_fallback_models: str = "gemini-3.1-flash-lite,gemini-3.5-flash,gemini-3-flash-preview,gemini-2.5-flash"
     embedding_model: str = "gemini-embedding-001"
     embedding_provider: str = "auto"  # auto | gemini | hash
     embedding_dim: int = 768
+    # How long ingestion may wait out embedding rate limits (uploads stay inside the 60 s function cap;
+    # the CLI raises it for bulk re-ingestion).
+    embed_wait_seconds: float = 30.0
     llm_mode: str = "auto"  # auto | off
 
     # Vercel sets VERCEL=1; serverless functions open a connection per request instead of pooling.
     vercel: str | None = None
+
+    @field_validator("llm_model", "embedding_model")
+    @classmethod
+    def _bare_model_name(cls, v: str) -> str:
+        # Accept LiteLLM-style "gemini/<model>" names; the REST API wants just "<model>".
+        return v.removeprefix("gemini/").removeprefix("models/")
 
     @property
     def serverless(self) -> bool:

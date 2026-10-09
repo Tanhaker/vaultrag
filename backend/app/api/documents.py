@@ -120,14 +120,15 @@ async def audit(user: CurrentUser, limit: int = 100) -> list[dict]:
         rows = await (await conn.execute(
             "SELECT id, created_at, user_id, action, query, cardinality(retrieved_chunk_ids) AS chunks, meta, latency_ms"
             "  FROM audit_log ORDER BY created_at DESC LIMIT %s", (min(limit, 300),))).fetchall()
-    names = {str(user.uid): user.name}
+    names = {str(user.uid): (user.name, user.email)}
     others = {r["user_id"] for r in rows} - {user.uid}
     if others and "admin" in user.roles:
         async with writer_session() as conn:
             for r in await (await conn.execute("SELECT id, name, email FROM users WHERE id = ANY(%s)", (list(others),))).fetchall():
-                names[str(r["id"])] = r["name"]
+                names[str(r["id"])] = (r["name"], r["email"])
     return [{
-        "id": str(r["id"]), "at": r["created_at"].isoformat()[:19], "userEmail": "", "userName": names.get(str(r["user_id"]), "—"),
+        "id": str(r["id"]), "at": r["created_at"].isoformat()[:19],
+        "userEmail": names.get(str(r["user_id"]), ("—", ""))[1], "userName": names.get(str(r["user_id"]), ("—", ""))[0],
         "action": r["action"], "detail": r["query"] or "", "chunks": r["chunks"],
         "filtered": (r["meta"] or {}).get("filtered", 0), "latencyMs": r["latency_ms"],
     } for r in rows]

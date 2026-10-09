@@ -153,3 +153,27 @@ async def test_uniform_refusal(api):
         same = forbidden["sentences"] == missing["sentences"] and forbidden["citations"] == missing["citations"] == []
         return same, "identical refusal" if same else "refusals differ"
     await attack("Existence leak through the refusal text", "existence", "Student", "one uniform refusal", check)
+
+
+async def test_revocation_beats_cache(api):
+    """The ACL changes on another server instance (no in-process cache clear) while the answer is cached."""
+    q = "What is the CSE department budget for 2026-27?"
+    async with db.writer_session() as conn:
+        doc = await (await conn.execute(
+            "SELECT id, allowed_roles FROM documents WHERE title LIKE 'CSE Department Budget%'")).fetchone()
+
+    async def check():
+        before = await api.ask(HOD_CSE, q)
+        again = await api.ask(HOD_CSE, q)
+        cached = again["steps"][0]["key"] == "cache"
+        async with db.writer_session() as conn:
+            await conn.execute("UPDATE documents SET allowed_roles = %s WHERE id = %s", (["finance"], doc["id"]))
+        try:
+            after = await api.ask(HOD_CSE, q)
+        finally:
+            async with db.writer_session() as conn:
+                await conn.execute("UPDATE documents SET allowed_roles = %s WHERE id = %s", (doc["allowed_roles"], doc["id"]))
+        ok = not before["refused"] and cached and after["refused"] and "48.5" not in json.dumps(after)
+        return ok, f"answered={not before['refused']} cached={cached} refused_after_revoke={after['refused']}"
+    await attack("Revoke access while the answer is cached elsewhere", "revocation", "HOD CSE",
+                 "KB-versioned ACL cache", check)

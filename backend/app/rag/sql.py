@@ -62,6 +62,10 @@ TEMPLATES = [
      "SELECT department, ROUND(AVG(attendance_pct), 1) AS avg_attendance, COUNT(*) AS students FROM students GROUP BY department ORDER BY department"),
     (re.compile(r"how many students|number of students|count of students", re.I),
      "SELECT department, COUNT(*) AS students FROM students GROUP BY department ORDER BY department"),
+    (re.compile(r"(fee|dues|balance).*(by|per|each|every) department|department.*(fee|dues)", re.I),
+     "SELECT s.department, COUNT(*) AS students, ROUND(AVG(f.amount_due - f.amount_paid)) AS avg_balance,"
+     " SUM(f.amount_due - f.amount_paid) AS balance FROM fee_payments f JOIN students s ON s.id = f.student_id"
+     " GROUP BY s.department ORDER BY s.department"),
     (re.compile(r"(pending|overdue|unpaid).*(fee|dues)|(fee|dues).*(pending|overdue|status)", re.I),
      "SELECT status, COUNT(*) AS students, SUM(amount_due - amount_paid) AS balance FROM fee_payments GROUP BY status ORDER BY status"),
     (re.compile(r"salar|ctc", re.I),
