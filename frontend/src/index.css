@@ -151,3 +151,109 @@ button:not(:disabled):active {
     color-mix(in oklab, var(--color-line) 70%, transparent) 32px
   );
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Landing page motion. Reveals are driven by data-in (set by useReveal); everything below is
+   decorative and switched off for people who prefer reduced motion. */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.9s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--d, 0ms);
+}
+[data-in="true"] .reveal,
+.reveal[data-in="true"] {
+  opacity: 1;
+  transform: none;
+}
+.reveal-x {
+  opacity: 0;
+  transform: translateX(-36px);
+  transition: opacity 0.8s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--d, 0ms);
+}
+[data-in="true"] .reveal-x {
+  opacity: 1;
+  transform: none;
+}
+/* Headline words rise one after another. */
+.word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.45em) rotate(1.5deg);
+  filter: blur(6px);
+  animation: word-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation-delay: var(--d, 0ms);
+}
+/* Same entrance for block elements (keeps their own display: grid, flex…). */
+.rise {
+  opacity: 0;
+  transform: translateY(18px);
+  filter: blur(4px);
+  animation: word-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes word-in {
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--r, 0deg)); }
+  50% { transform: translate3d(0, -10px, 0) rotate(var(--r, 0deg)); }
+}
+.float { animation: float-y 7s ease-in-out infinite; animation-delay: var(--d, 0ms); }
+
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.spin-slow { animation: spin-slow 60s linear infinite; transform-origin: center; transform-box: fill-box; }
+.spin-slower { animation: spin-slow 110s linear infinite reverse; transform-origin: center; transform-box: fill-box; }
+
+@keyframes dash-flow { to { stroke-dashoffset: -40; } }
+.dash-flow { stroke-dasharray: 4 6; animation: dash-flow 1.6s linear infinite; }
+
+@keyframes sweep {
+  0% { transform: translateY(-110%); }
+  100% { transform: translateY(110%); }
+}
+.sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent, color-mix(in oklab, var(--color-brand) 22%, transparent) 48%, transparent);
+  animation: sweep 2.4s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.55; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.pulse-ring { animation: pulse-ring 2.6s cubic-bezier(0.2, 0.7, 0.2, 1) infinite; transform-origin: center; transform-box: fill-box; }
+
+/* Dark ink sections carry their own grain so they don't read as a flat digital fill. */
+.ink-grain {
+  background-color: var(--color-ink);
+  background-image:
+    radial-gradient(1200px 600px at 75% 20%, color-mix(in oklab, var(--color-brand) 34%, transparent), transparent 60%),
+    radial-gradient(900px 500px at 10% 90%, color-mix(in oklab, var(--color-brand) 16%, transparent), transparent 60%);
+}
+.ink-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.text-balance { text-wrap: balance; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-x, .word, .rise { opacity: 1 !important; transform: none !important; filter: none !important; animation: none !important; transition: none !important; }
+  .float, .spin-slow, .spin-slower, .dash-flow, .pulse-ring, .sweep::after { animation: none !important; }
+  html { scroll-behavior: auto; }
+}

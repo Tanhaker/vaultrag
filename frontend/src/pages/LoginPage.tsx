@@ -1,6 +1,6 @@
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Logo } from "../components/Layout";
 import { Avatar, Button, ClassBadge, cx } from "../components/ui";
 import { DEMO_PASSWORD, PERSONAS } from "../lib/personas";
@@ -54,8 +54,8 @@ export function LoginPage() {
       <div className="mx-auto grid max-w-[1320px] gap-12 px-5 py-8 sm:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:gap-20 lg:py-12">
         <section className="flex flex-col">
           <div className="flex items-center justify-between">
-            <Logo />
-            <span className="text-[12px] text-ink-3">PS-01 · Code Carnival, Atmiya University</span>
+            <Link to="/" aria-label="Back to the story"><Logo /></Link>
+            <Link to="/" className="text-[12px] text-ink-3 hover:text-ink">← The story · PS-01 · Code Carnival</Link>
           </div>
 
           <div className="ruled -mx-2 mt-14 px-2 pb-2 lg:mt-24">

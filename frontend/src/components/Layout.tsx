@@ -1,11 +1,12 @@
 import { ChevronDown, LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { PERSONAS, roleLabel } from "../lib/personas";
 import { useSession } from "../lib/session";
 import { Avatar, ClassBadge, cx } from "./ui";
 
 const NAV = [
+  { to: "/", label: "Story" },
   { to: "/ask", label: "Ask" },
   { to: "/compare", label: "Compare" },
   { to: "/knowledge", label: "Knowledge base" },
@@ -123,7 +124,7 @@ export function Layout() {
     <div className="flex h-dvh flex-col">
       <header className="relative z-30 shrink-0 border-b border-line bg-bg/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-8 gap-y-1 px-4 pt-2.5 sm:px-6 lg:flex-nowrap lg:pt-0">
-          <Logo className="lg:py-3" />
+          <Link to="/" aria-label="VaultRAG story"><Logo className="lg:py-3" /></Link>
           <div className="ml-auto flex items-center gap-4 lg:order-3">
             <BackendStatus />
             <UserSwitcher />
@@ -133,6 +134,7 @@ export function Layout() {
               <NavLink
                 key={to}
                 to={to}
+                end={to === "/"}
                 className={({ isActive }) =>
                   cx(
                     "relative shrink-0 px-2.5 py-3 text-[13.5px] transition-colors lg:py-[18px]",

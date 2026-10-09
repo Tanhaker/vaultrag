@@ -3,6 +3,7 @@ import {
   Loader2, Lock, LockOpen, Radar, ScanSearch, ScrollText, ShieldAlert, ShieldCheck, Siren, Sigma, Timer, Unplug, UserCheck,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { BarList, Distribution, Donut, Gauge, Sparkline } from "../components/charts";
 import { PlanModal } from "../components/PlanModal";
 import { Button, Card, Chip, SectionTitle, cx } from "../components/ui";
@@ -632,7 +633,13 @@ export function SecurityPage() {
   const user = session!.user;
   const isAdmin = user.roles.includes("admin");
   const live = session!.mode === "live";
-  const [tab, setTab] = useState<Tab>("overview");
+  const [params, setParams] = useSearchParams();
+  const fromUrl = params.get("tab") as Tab | null;
+  const [tab, setTabState] = useState<Tab>(fromUrl && TABS.some((t) => t.key === fromUrl) ? fromUrl : "overview");
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    setParams(t === "overview" ? {} : { tab: t }, { replace: true });
+  };
   const [evalData, setEvalData] = useState<EvalResults | null>(null);
   const [chain, setChain] = useState<AuditChain | null>(null);
 
