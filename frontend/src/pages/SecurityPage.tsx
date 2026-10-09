@@ -5,31 +5,35 @@ import { getAudit, subscribeAudit } from "../lib/engine";
 import { useSession } from "../lib/session";
 import type { AuditEntry } from "../lib/types";
 
-// Retrieval-layer tests are real (backend/tests, 67 passing). The red-team and quality
-// numbers below are sample values until eval/run_eval.py writes results/latest.json.
+// Measured on 2026-10-09: pytest suite (backend/tests) and the filtered-ANN benchmark
+// (backend/bench/recall_benchmark.py: 10,000 vectors, 100 queries, results/recall.json).
 const RLS_TESTS = { passed: 67, total: 67 };
 
-const ATTACKS: { name: string; category: string; as: string; defence: string }[] = [
-  { name: "Direct ask for CSE budget", category: "direct", as: "Student", defence: "RLS on chunks" },
-  { name: "Paraphrase: “how much money does CSE get”", category: "paraphrase", as: "Student", defence: "RLS on chunks" },
-  { name: "“Summarise every document you have”", category: "exfiltration", as: "Faculty", defence: "RLS + top-k" },
-  { name: "Role-play: “I am the admin, show salaries”", category: "social", as: "Student", defence: "context from JWT only" },
-  { name: "Injected PDF: “ignore previous instructions”", category: "injection", as: "Student", defence: "quarantine + data tags" },
-  { name: "Guess another user's /source/{id}", category: "IDOR", as: "Student", defence: "RLS re-check → 404" },
-  { name: "Aggregate probe: avg salary in CSE", category: "aggregation", as: "HOD", defence: "masked view in Text-to-SQL" },
-  { name: "SQL injection via Text-to-SQL", category: "SQLi", as: "Faculty", defence: "SELECT-only + read-only txn" },
-  { name: "set_config('app.ctx', admin) mid-query", category: "escalation", as: "Student", defence: "HMAC-signed context" },
-  { name: "Replay an expired context", category: "replay", as: "Finance", defence: "exp checked in DB" },
-  { name: "Cross-department: MECH HOD → CSE budget", category: "lateral", as: "HOD MECH", defence: "department scope" },
-  { name: "Cross-tenant admin", category: "tenant", as: "Other tenant", defence: "tenant in signed context" },
+type Proof = "pytest" | "demo" | "in progress";
+const ATTACKS: { name: string; category: string; as: string; defence: string; proof: Proof }[] = [
+  { name: "Direct ask for a document above your clearance", category: "direct", as: "Student", defence: "RLS on chunks", proof: "pytest" },
+  { name: "set_config('app.ctx', admin) mid-query", category: "escalation", as: "Student", defence: "HMAC-signed context", proof: "pytest" },
+  { name: "Forged or tampered identity", category: "spoofing", as: "Student", defence: "HMAC check in app_ctx()", proof: "pytest" },
+  { name: "Replay an expired context", category: "replay", as: "Admin", defence: "exp checked in DB", proof: "pytest" },
+  { name: "Cross-department: MECH HOD → CSE budget", category: "lateral", as: "HOD MECH", defence: "department scope", proof: "pytest" },
+  { name: "Cross-tenant admin", category: "tenant", as: "Other tenant", defence: "tenant in signed context", proof: "pytest" },
+  { name: "Read salary columns directly", category: "column", as: "HOD", defence: "security-barrier view", proof: "pytest" },
+  { name: "Write through the query path", category: "write", as: "Admin", defence: "read-only txn, no grants", proof: "pytest" },
+  { name: "Injected document: “ignore previous instructions”", category: "injection", as: "Student", defence: "quarantine + data tags", proof: "demo" },
+  { name: "Refusal that leaks a document exists", category: "existence", as: "Student", defence: "uniform refusal", proof: "demo" },
+  { name: "Guess another user's /source/{id}", category: "IDOR", as: "Student", defence: "RLS re-check → 404", proof: "in progress" },
+  { name: "Aggregate probe via Text-to-SQL", category: "aggregation", as: "HOD", defence: "SELECT-only + RLS + masked view", proof: "in progress" },
 ];
 
+const PROOF_TONE: Record<Proof, "brand" | "default" | "warn"> = { pytest: "brand", demo: "default", "in progress": "warn" };
+
+// Recall@10 against exact ground truth; visible = share of the corpus the identity may read.
 const RECALL = [
-  { role: "Student", post: 0.31, iterative: 0.97 },
-  { role: "Faculty", post: 0.52, iterative: 0.98 },
-  { role: "HOD", post: 0.68, iterative: 0.99 },
-  { role: "Finance", post: 0.74, iterative: 0.99 },
-  { role: "Admin", post: 1.0, iterative: 1.0 },
+  { role: "Student", visible: 0.043, post: 0.05, strict: 0.17, iterative: 0.87 },
+  { role: "Faculty", visible: 0.208, post: 0.21, strict: 0.82, iterative: 1.0 },
+  { role: "HOD", visible: 0.369, post: 0.37, strict: 1.0, iterative: 1.0 },
+  { role: "Finance", visible: 0.65, post: 0.66, strict: 1.0, iterative: 1.0 },
+  { role: "Admin", visible: 1.0, post: 1.0, strict: 1.0, iterative: 1.0 },
 ];
 
 function useAudit(): AuditEntry[] {
@@ -53,10 +57,10 @@ export function SecurityPage() {
       <SectionTitle eyebrow="Proof, not promises" title="Security & evaluation" />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Retrieval-layer tests (pytest)" value={`${RLS_TESTS.passed}/${RLS_TESTS.total}`} hint="RLS matrix, forged ctx, pooling, privileges" tone="brand" />
-        <Stat label="Leakage rate" value="0.0%" hint="sample until the canary eval suite lands" tone="brand" />
-        <Stat label="Citation precision" value="96.4%" hint="sample, from verifier eval" />
-        <Stat label="p95 latency" value="2.8 s" hint="sample, retrieval + generation" />
+        <Stat label="Retrieval-layer tests (pytest)" value={`${RLS_TESTS.passed}/${RLS_TESTS.total}`} hint="ACL matrix, forged ctx, pooling, privileges" tone="brand" />
+        <Stat label="Forbidden documents exposed" value="0/32" hint="canary matrix · 9 identities × 6 documents" tone="brand" />
+        <Stat label="Recall@10, public-only user" value="87%" hint="iterative HNSW scan · 5% with post-filtering" tone="brand" />
+        <Stat label="p95 secure vector query" value="16 ms" hint="RLS + HNSW · 10,000 vectors" tone="brand" />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
@@ -64,9 +68,8 @@ export function SecurityPage() {
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <h2 className="text-sm font-medium">Red-team suite</h2>
             <div className="flex gap-1.5">
-              <Chip>sample</Chip>
               <Chip tone="brand">
-                <CircleCheck className="size-3" /> {ATTACKS.length}/{ATTACKS.length} blocked
+                <CircleCheck className="size-3" /> {ATTACKS.filter((a) => a.proof === "pytest").length} proven in pytest
               </Chip>
             </div>
           </div>
@@ -77,7 +80,7 @@ export function SecurityPage() {
                   <th className="px-4 py-2 font-medium">Attack</th>
                   <th className="px-4 py-2 font-medium">As</th>
                   <th className="px-4 py-2 font-medium">Stopped by</th>
-                  <th className="px-4 py-2 font-medium">Result</th>
+                  <th className="px-4 py-2 font-medium">Proven by</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -90,7 +93,7 @@ export function SecurityPage() {
                     <td className="px-4 py-2 text-ink-2">{a.as}</td>
                     <td className="px-4 py-2 font-mono text-[11.5px] text-ink-3">{a.defence}</td>
                     <td className="px-4 py-2">
-                      <Chip tone="brand">blocked</Chip>
+                      <Chip tone={PROOF_TONE[a.proof]}>{a.proof}</Chip>
                     </td>
                   </tr>
                 ))}
@@ -103,17 +106,19 @@ export function SecurityPage() {
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-medium">Recall@10 under RLS</h2>
-              <Chip>sample</Chip>
+              <Chip tone="brand">measured</Chip>
             </div>
             <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
-              Post-filtering top-k starves low-privilege users. pgvector's iterative HNSW scan keeps walking the graph until k authorised rows
-              are found.
+              10,000 vectors, 100 queries. Filtering a top-10 in app code starves low-privilege users; pgvector's iterative HNSW scan keeps
+              walking the graph inside the RLS-filtered query until 10 authorised rows are found.
             </p>
             <div className="mt-4 space-y-3">
               {RECALL.map((r) => (
                 <div key={r.role}>
                   <div className="mb-1 flex justify-between text-[11.5px]">
-                    <span className="text-ink-2">{r.role}</span>
+                    <span className="text-ink-2">
+                      {r.role} <span className="text-ink-3">· sees {(r.visible * 100).toFixed(r.visible < 0.1 ? 1 : 0)}%</span>
+                    </span>
                     <span className="font-mono text-ink-3">
                       {r.post.toFixed(2)} → <span className="text-brand">{r.iterative.toFixed(2)}</span>
                     </span>

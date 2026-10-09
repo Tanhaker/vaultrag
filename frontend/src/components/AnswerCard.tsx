@@ -185,7 +185,7 @@ export function AnswerCard({ answer, live = false, compact = false, activeCite, 
                   {answer.sentences.filter((s) => !s.removed).length} verified
                   {answer.sentences.some((s) => s.removed) && ` · ${answer.sentences.filter((s) => s.removed).length} unsupported removed`}
                 </span>
-                <span>{answer.citations.length} sources</span>
+                <span>{answer.citations.length} {answer.citations.length === 1 ? "source" : "sources"}</span>
               </div>
               {!compact && (
                 <div className="grid gap-1.5">

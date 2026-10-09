@@ -205,7 +205,7 @@ export const CHUNKS: Chunk[] = [
 
   // Fee notice (image, public)
   {
-    id: "c-fee-ocr", docId: "d-fee-notice", modality: "ocr", bbox: [12, 22, 88, 70], ocrConfidence: 0.95,
+    id: "c-fee-ocr", docId: "d-fee-notice", modality: "ocr", bbox: [12, 14, 88, 47], ocrConfidence: 0.95,
     content:
       "B.TECH FEE STRUCTURE 2026-27 (per year)\nCSE ₹1,35,000 · EC ₹1,25,000 · MECH ₹1,15,000 · CIVIL ₹1,10,000\nPayable in two instalments: 31 August and 31 October.",
     tags: ["fee", "fees", "structure", "tuition", "btech", "cost", "per", "year", "instalment", "installment", "annual"],
@@ -223,7 +223,7 @@ export const CHUNKS: Chunk[] = [
 
   // Workshop notice (image, public)
   {
-    id: "c-ws-ocr", docId: "d-workshop", modality: "ocr", bbox: [14, 20, 86, 66], ocrConfidence: 0.92,
+    id: "c-ws-ocr", docId: "d-workshop", modality: "ocr", bbox: [12, 14, 88, 52], ocrConfidence: 0.92,
     content:
       "INTER-DEPARTMENT ROBOTICS WORKSHOP — 17 October 2026, 10:00 AM, Seminar Hall 2. Hands-on with ROS 2 and line-follower bots. Register at the Student Council desk by 14 October.",
     tags: ["robotics", "workshop", "event", "when", "date", "seminar", "register", "registration", "ros"],
