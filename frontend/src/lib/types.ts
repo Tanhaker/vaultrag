@@ -1,5 +1,5 @@
 export type SourceType = "pdf" | "image" | "db_record";
-export type Modality = "text" | "table" | "ocr" | "caption" | "record";
+export type Modality = "text" | "table" | "ocr" | "caption" | "record" | "sql";
 
 export interface User {
   uid: string;
@@ -33,6 +33,7 @@ export interface Doc {
   status: "ready" | "processing" | "failed";
   flags?: string[];
   summary: string;
+  chunks?: number;
 }
 
 export interface Chunk {
@@ -49,7 +50,10 @@ export interface Chunk {
   record?: Record<string, string>;
   masked?: string[];
   injection?: boolean;
-  ocrConfidence?: number;
+  ocrConfidence?: number | null;
+  sql?: string;
+  rows?: Record<string, string | number | null>[];
+  columns?: string[];
 }
 
 export interface Citation {
@@ -86,6 +90,14 @@ export interface Answer {
   xray: { candidates: number; visible: number; filtered: number };
   latencyMs: number;
   at: string;
+  mode?: "llm" | "extractive" | "sql" | "refused";
+}
+
+export interface SourceData {
+  chunk: Chunk;
+  doc: Doc;
+  blocks: Chunk[];
+  image: { src: string; width: number; height: number } | null;
 }
 
 export interface AuditEntry {
@@ -93,7 +105,7 @@ export interface AuditEntry {
   at: string;
   userEmail: string;
   userName: string;
-  action: "query" | "login" | "upload" | "source_view" | "denied_source";
+  action: "query" | "login" | "upload" | "source_view" | "denied_source" | "acl_change";
   detail: string;
   chunks: number;
   filtered: number;

@@ -4,9 +4,9 @@ import { AnswerCard } from "../components/AnswerCard";
 import { Mark } from "../components/Layout";
 import { SourceViewer } from "../components/SourceViewer";
 import { Avatar, ClassBadge, cx } from "../components/ui";
-import { fetchXray, type Xray } from "../lib/api";
+import { ask, fetchXray, type Xray } from "../lib/api";
 import { SUGGESTED_QUESTIONS } from "../lib/corpus";
-import { ask, recordAudit } from "../lib/engine";
+import { ask as demoAsk, recordAudit } from "../lib/engine";
 import { roleLabel } from "../lib/personas";
 import { useSession } from "../lib/session";
 import type { Answer, Citation } from "../lib/types";
@@ -64,7 +64,13 @@ export function AskPage() {
     if (!question || busy) return;
     setBusy(true);
     setInput("");
-    const a = await ask(question, user);
+    let a: Answer;
+    try {
+      a = await ask(question, session!);
+    } catch (e) {
+      a = await demoAsk(question, user);
+      a.steps.unshift({ key: "offline", label: "Backend unavailable", detail: `${String((e as Error).message ?? e).slice(0, 50)} → in-browser engine`, ms: 1 });
+    }
     const next = [...(threads.get(user.email) ?? []), a];
     threads.set(user.email, next);
     setThread(next);
@@ -78,7 +84,9 @@ export function AskPage() {
 
   function openSource(c: Citation) {
     setSource(c);
-    recordAudit({ userEmail: user.email, userName: user.name, action: "source_view", detail: `GET /source/${c.chunk.id}`, chunks: 1, filtered: 0 });
+    if (session!.mode === "demo") {
+      recordAudit({ userEmail: user.email, userName: user.name, action: "source_view", detail: `GET /source/${c.chunk.id}`, chunks: 1, filtered: 0 });
+    }
   }
 
   return (

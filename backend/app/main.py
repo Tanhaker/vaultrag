@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
-from .api import auth, records, xray
+from .ai.embeddings import provider
+from .api import auth, documents, query, records, source, xray
 from .config import get_settings
 
 
@@ -15,7 +16,7 @@ async def lifespan(_: FastAPI):
     await db.close_pools()
 
 
-app = FastAPI(title="VaultRAG", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="VaultRAG", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
@@ -23,11 +24,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(auth.router)
-app.include_router(records.router)
-app.include_router(xray.router)
+for r in (auth.router, records.router, xray.router, query.router, source.router, documents.router):
+    app.include_router(r)
 
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    s = get_settings()
+    return {"status": "ok", "llm": s.llm_model if s.llm_enabled else "off", "embeddings": provider(),
+            "runtime": "serverless" if s.serverless else "server"}

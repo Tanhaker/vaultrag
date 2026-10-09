@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { Answer, Citation } from "../lib/types";
 import { ClassBadge, ModalityTag, SourceIcon, cx } from "./ui";
 
+const MODE_LABEL: Record<string, string> = { llm: "Gemini · grounded", extractive: "extractive · no LLM", sql: "Text-to-SQL · RLS" };
+
 export function CiteChip({ n, citation, active, onClick }: { n: number; citation?: Citation; active?: boolean; onClick?: () => void }) {
   return (
     <button
@@ -186,6 +188,7 @@ export function AnswerCard({ answer, live = false, compact = false, activeCite, 
                   {answer.sentences.some((s) => s.removed) && ` · ${answer.sentences.filter((s) => s.removed).length} unsupported removed`}
                 </span>
                 <span>{answer.citations.length} {answer.citations.length === 1 ? "source" : "sources"}</span>
+                {answer.mode && answer.mode !== "refused" && <span className="font-mono text-[11px]">{MODE_LABEL[answer.mode]}</span>}
               </div>
               {!compact && (
                 <div className="grid gap-1.5">

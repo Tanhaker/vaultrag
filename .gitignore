@@ -8,3 +8,8 @@ dist/
 data/uploads/
 eval/results/*.json
 *.tsbuildinfo
+.vercel
+.env.vercel*
+
+.vercel
+.env*

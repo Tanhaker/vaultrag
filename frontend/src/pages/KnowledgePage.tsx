@@ -1,6 +1,7 @@
 import { CircleCheck, EyeOff, Loader2, Pencil, ShieldAlert, Upload, X } from "lucide-react";
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { Button, Card, ClassBadge, SectionTitle, SourceIcon, Chip, cx } from "../components/ui";
+import { fetchDocuments, patchAcl, uploadDocument, type IngestResult, type RecordGroup } from "../lib/api";
 import { CHUNKS, DOCS } from "../lib/corpus";
 import { aclAllows, recordAudit } from "../lib/engine";
 import { CLASSIFICATION } from "../lib/personas";
@@ -76,7 +77,7 @@ function AclFields({ value, onChange }: { value: Pick<Doc, "classification" | "d
 
 const INGEST_STEPS = ["Upload & sha256 dedupe", "Detect type / text layer", "Extract text · OCR · caption", "Layout-aware chunking", "Embed (768-d)", "Index with inherited ACL"];
 
-function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: (d: Doc) => void }) {
+function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: (d: Doc | null) => void }) {
   const { session } = useSession();
   const [file, setFile] = useState<File | null>(null);
   const [acl, setAcl] = useState<Pick<Doc, "classification" | "department" | "allowedRoles">>({ classification: 1, department: null, allowedRoles: ["faculty", "hod"] });
@@ -86,10 +87,41 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: (d: Doc
     setFile(e.target.files?.[0] ?? null);
   }
 
-  function start() {
-    if (!file) return;
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<IngestResult | null>(null);
+
+  function animate(until: () => boolean) {
     let i = 0;
+    const tick = () => {
+      if (until()) return;
+      i = Math.min(i + 1, INGEST_STEPS.length - 1);
+      setStep(i);
+      setTimeout(tick, 650 + Math.random() * 400);
+    };
+    setTimeout(tick, 400);
+  }
+
+  async function start() {
+    if (!file) return;
     setStep(0);
+    setError(null);
+    if (session!.mode === "live") {
+      let finished = false;
+      animate(() => finished);
+      try {
+        const r = await uploadDocument(session!, file, acl);
+        finished = true;
+        setResult(r);
+        setStep(INGEST_STEPS.length);
+        setTimeout(() => onDone(null), 1600);
+      } catch (e) {
+        finished = true;
+        setError((e as Error).message);
+        setStep(-1);
+      }
+      return;
+    }
+    let i = 0;
     const tick = () => {
       i += 1;
       setStep(i);
@@ -100,7 +132,7 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: (d: Doc
           id: `up-${crypto.randomUUID().slice(0, 8)}`, title: file.name, sourceType: type, ...acl, allowedUsers: [],
           owner: session!.user.name, uploadedAt: new Date().toISOString().slice(0, 10),
           size: `${Math.max(1, Math.round(file.size / 1024))} KB`, status: "ready", flags: type === "image" ? ["ocr", "caption"] : [],
-          summary: "Uploaded in this session.",
+          summary: "Uploaded in this session (offline demo: not searchable).",
         };
         recordAudit({ userEmail: session!.user.email, userName: session!.user.name, action: "upload", detail: `${file.name} · ${CLASSIFICATION[acl.classification]}`, chunks: 0, filtered: 0 });
         setTimeout(() => onDone(doc), 500);
@@ -127,6 +159,7 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: (d: Doc
               <input type="file" accept=".pdf,image/*" className="hidden" onChange={pick} />
             </label>
             <AclFields value={acl} onChange={setAcl} />
+            {error && <div className="rounded-[10px] bg-deny/10 px-3 py-2 text-[13px] text-deny">{error}</div>}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={onClose}>Cancel</Button>
               <Button onClick={start} disabled={!file || acl.allowedRoles.length === 0}>
@@ -136,12 +169,19 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: (d: Doc
           </div>
         ) : (
           <div className="space-y-2.5 p-5">
-            {INGEST_STEPS.map((s, i) => (
-              <div key={s} className={cx("flex items-center gap-3 text-sm", i > step && "opacity-35")}>
-                {i < step ? <CircleCheck className="size-4 text-brand" /> : i === step ? <Loader2 className="size-4 animate-spin text-brand" /> : <span className="size-4 rounded-full border border-line-2" />}
-                {s}
+            {(result?.steps ?? INGEST_STEPS.map((label) => ({ key: label, label, detail: "", ms: 0 }))).map((st, i) => (
+              <div key={st.key} className={cx("flex items-center gap-3 text-sm", !result && i > step && "opacity-35")}>
+                {result || i < step ? <CircleCheck className="size-4 shrink-0 text-brand" /> : i === step ? <Loader2 className="size-4 shrink-0 animate-spin text-brand" /> : <span className="size-4 shrink-0 rounded-full border border-line-2" />}
+                <span className="w-44 shrink-0">{st.label}</span>
+                {result && <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-3">{st.detail}</span>}
+                {result && <span className="font-mono text-[11px] tabular-nums text-ink-3">{st.ms} ms</span>}
               </div>
             ))}
+            {result && (
+              <div className="pt-2 text-[13px] text-ink-2">
+                {result.duplicate ? "Already in the index (same SHA-256)." : `Indexed ${result.chunks} chunks.`}
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -149,9 +189,9 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: (d: Doc
   );
 }
 
-function AclDrawer({ doc, onClose, onSave }: { doc: Doc; onClose: () => void; onSave: (v: Pick<Doc, "classification" | "department" | "allowedRoles">) => void }) {
+function AclDrawer({ doc, onClose, onSave, error }: { doc: Doc; onClose: () => void; onSave: (v: Pick<Doc, "classification" | "department" | "allowedRoles">) => void; error?: string | null }) {
   const [acl, setAcl] = useState({ classification: doc.classification, department: doc.department, allowedRoles: doc.allowedRoles });
-  const chunks = CHUNKS.filter((c) => c.docId === doc.id).length;
+  const chunks = doc.chunks ?? CHUNKS.filter((c) => c.docId === doc.id).length;
   return (
     <>
       <div className="fixed inset-0 z-40 bg-ink/25 backdrop-blur-[2px]" onClick={onClose} />
@@ -184,6 +224,7 @@ function AclDrawer({ doc, onClose, onSave }: { doc: Doc; onClose: () => void; on
             <span className="text-ink-3">-- trigger documents_acl → {chunks} chunk{chunks === 1 ? "" : "s"} updated instantly</span>
           </pre>
         </div>
+        {error && <div className="mx-4 mb-2 rounded-[10px] bg-deny/10 px-3 py-2 text-[13px] text-deny">{error}</div>}
         <div className="flex justify-end gap-2 border-t border-line p-4">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={() => onSave(acl)} disabled={acl.allowedRoles.length === 0}>Save &amp; propagate</Button>
@@ -197,21 +238,50 @@ export function KnowledgePage() {
   const { session } = useSession();
   const user = session!.user;
   const isAdmin = user.roles.includes("admin");
-  const canUpload = !user.roles.includes("student");
+  const canUpload = !(user.roles.length === 1 && user.roles[0] === "student");
   const [filter, setFilter] = useState<"all" | SourceType>("all");
+  const [docs, setDocs] = useState<Doc[] | null>(null);
+  const [records, setRecords] = useState<RecordGroup[]>([]);
   const [uploads, setUploads] = useState<Doc[]>([]);
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState<Doc | null>(null);
-  const [, bump] = useState(0);
+  const [aclError, setAclError] = useState<string | null>(null);
 
-  const all = useMemo(() => [...uploads, ...DOCS], [uploads]);
-  const visible = all.filter((d) => aclAllows(user, d) && (filter === "all" || d.sourceType === filter));
+  const load = useCallback(async () => {
+    try {
+      const r = await fetchDocuments(session!);
+      setDocs(r.documents);
+      setRecords(r.records);
+    } catch {
+      setDocs(DOCS.filter((d) => aclAllows(user, d) && d.sourceType !== "db_record"));
+    }
+  }, [session, user]);
 
-  function saveAcl(doc: Doc, v: Pick<Doc, "classification" | "department" | "allowedRoles">) {
-    Object.assign(doc, v); // the demo engine reads ACLs at query time, so revocation is instant
-    recordAudit({ userEmail: user.email, userName: user.name, action: "upload", detail: `ACL change on ${doc.title} → ${CLASSIFICATION[v.classification]} · ${v.allowedRoles.join(",")}`, chunks: 0, filtered: 0 });
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const all = [...uploads, ...(docs ?? [])];
+  const visible = all.filter((d) => filter === "all" || d.sourceType === filter);
+
+  async function saveAcl(doc: Doc, v: Pick<Doc, "classification" | "department" | "allowedRoles">) {
+    setAclError(null);
+    if (session!.mode === "live") {
+      try {
+        await patchAcl(session!, doc.id, v);
+      } catch (e) {
+        setAclError((e as Error).message);
+        return;
+      }
+      setEditing(null);
+      await load();
+      return;
+    }
+    const demoDoc = DOCS.find((d) => d.id === doc.id);
+    if (demoDoc) Object.assign(demoDoc, v); // the demo engine reads ACLs at query time, so revocation is instant
+    recordAudit({ userEmail: user.email, userName: user.name, action: "acl_change", detail: `ACL change on ${doc.title} → ${CLASSIFICATION[v.classification]} · ${v.allowedRoles.join(",")}`, chunks: 0, filtered: 0 });
     setEditing(null);
-    bump((n) => n + 1);
+    await load();
   }
 
   return (
@@ -238,7 +308,7 @@ export function KnowledgePage() {
         </div>
         <div className="flex items-center gap-1.5 text-[12px] text-ink-3">
           <EyeOff className="size-3.5" />
-          You can see {all.filter((d) => aclAllows(user, d)).length} sources. Ones you can't access are not listed, not even by title.
+          You can see {all.length} documents{records.length ? ` and ${records.reduce((a, r) => a + r.rows, 0)} record cards` : ""}. Ones you can't access are not listed, not even by title.
         </div>
       </div>
 
@@ -296,11 +366,37 @@ export function KnowledgePage() {
                   )}
                 </tr>
               ))}
-              {visible.length === 0 && (
+              {docs === null && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-ink-3"><Loader2 className="mx-auto size-5 animate-spin" /></td>
+                </tr>
+              )}
+              {docs !== null && visible.length === 0 && filter !== "db_record" && (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-ink-3">No sources of this type are available to you.</td>
                 </tr>
               )}
+              {(filter === "all" || filter === "db_record") && records.map((g) => (
+                <tr key={g.relation} className="bg-panel-2/25">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <SourceIcon type="db_record" />
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{g.relation}</div>
+                        <div className="truncate text-[11.5px] text-ink-3">{g.rows} record card{g.rows === 1 ? "" : "s"} you can read · each row keeps its own ACL</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1"><ClassBadge level={g.min_cls} compact />{g.max_cls !== g.min_cls && <ClassBadge level={g.max_cls} compact />}</div>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-[12px] text-ink-2">per row</td>
+                  <td className="px-4 py-3"><Chip>row policy</Chip></td>
+                  <td className="px-4 py-3"><Chip tone="brand">{g.rows} rows</Chip></td>
+                  <td className="px-4 py-3 text-[12px] text-ink-3">synced</td>
+                  {isAdmin && <td />}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -310,12 +406,15 @@ export function KnowledgePage() {
         <UploadModal
           onClose={() => setUploading(false)}
           onDone={(d) => {
-            setUploads((u) => [d, ...u]);
+            if (d) setUploads((u) => [d, ...u]);
             setUploading(false);
+            load();
           }}
         />
       )}
-      {editing && <AclDrawer doc={editing} onClose={() => setEditing(null)} onSave={(v) => saveAcl(editing, v)} />}
+      {editing && (
+        <AclDrawer doc={editing} error={aclError} onClose={() => { setEditing(null); setAclError(null); }} onSave={(v) => saveAcl(editing, v)} />
+      )}
     </div>
   );
 }

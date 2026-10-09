@@ -4,13 +4,16 @@ import { AnswerCard, SourceRow } from "../components/AnswerCard";
 import { SourceViewer } from "../components/SourceViewer";
 import { Avatar, Button, ClassBadge, SectionTitle, cx } from "../components/ui";
 import { SUGGESTED_QUESTIONS } from "../lib/corpus";
-import { ask } from "../lib/engine";
+import { ask, sessionFor } from "../lib/api";
+import { ask as demoAsk } from "../lib/engine";
+import { useSession } from "../lib/session";
 import { PERSONAS, toUser } from "../lib/personas";
 import type { Answer, Citation } from "../lib/types";
 
 const DEFAULT_SLOTS = ["aarav.student@atmiya.test", "hod.cse@atmiya.test", "finance@atmiya.test"];
 
 export function ComparePage() {
+  const { session } = useSession();
   const [slots, setSlots] = useState<string[]>(DEFAULT_SLOTS);
   const [question, setQuestion] = useState(SUGGESTED_QUESTIONS[0]);
   const [answers, setAnswers] = useState<(Answer | null)[]>([null, null, null]);
@@ -22,7 +25,15 @@ export function ComparePage() {
     if (!q.trim()) return;
     setQuestion(q);
     const results = await Promise.all(
-      slots.map((email) => ask(q, toUser(PERSONAS.find((p) => p.email === email)!))),
+      slots.map(async (email) => {
+        const user = toUser(PERSONAS.find((p) => p.email === email)!);
+        if (session?.mode !== "live") return demoAsk(q, user);
+        try {
+          return await ask(q, await sessionFor(email));
+        } catch {
+          return demoAsk(q, user);
+        }
+      }),
     );
     setAnswers(results);
     setRunId((n) => n + 1);

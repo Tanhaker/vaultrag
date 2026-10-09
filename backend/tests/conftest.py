@@ -118,3 +118,27 @@ async def world(pools):
     yield
     async with db.writer_session() as conn:
         await _cleanup(conn)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Write eval/results/{pytest,redteam}.json for the Security dashboard."""
+    import datetime
+    import json
+    from pathlib import Path
+
+    from . import results
+
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    stats = reporter.stats if reporter else {}
+    passed, failed = len(stats.get("passed", [])), len(stats.get("failed", [])) + len(stats.get("error", []))
+    if passed + failed == 0:
+        return
+    out = Path(__file__).resolve().parents[1] / "eval" / "results"
+    out.mkdir(parents=True, exist_ok=True)
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    (out / "pytest.json").write_text(json.dumps({"passed": passed, "failed": failed, "skipped": len(stats.get("skipped", [])),
+                                                 "at": now}, indent=2))
+    if results.RESULTS:
+        (out / "redteam.json").write_text(json.dumps({"at": now, "attacks": results.RESULTS,
+                                                      "passed": sum(r["passed"] for r in results.RESULTS),
+                                                      "total": len(results.RESULTS)}, indent=2))

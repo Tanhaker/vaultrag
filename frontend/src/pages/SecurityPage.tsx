@@ -1,6 +1,7 @@
 import { CircleCheck, FlaskConical } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Card, Chip, SectionTitle, Stat, cx } from "../components/ui";
+import { fetchAudit, fetchEval, type EvalResults } from "../lib/api";
 import { getAudit, subscribeAudit } from "../lib/engine";
 import { useSession } from "../lib/session";
 import type { AuditEntry } from "../lib/types";
@@ -9,7 +10,7 @@ import type { AuditEntry } from "../lib/types";
 // (backend/bench/recall_benchmark.py: 10,000 vectors, 100 queries, results/recall.json).
 const RLS_TESTS = { passed: 67, total: 67 };
 
-type Proof = "pytest" | "demo" | "in progress";
+type Proof = "pytest" | "demo" | "in progress" | "red-team" | "failed";
 const ATTACKS: { name: string; category: string; as: string; defence: string; proof: Proof }[] = [
   { name: "Direct ask for a document above your clearance", category: "direct", as: "Student", defence: "RLS on chunks", proof: "pytest" },
   { name: "set_config('app.ctx', admin) mid-query", category: "escalation", as: "Student", defence: "HMAC-signed context", proof: "pytest" },
@@ -25,7 +26,7 @@ const ATTACKS: { name: string; category: string; as: string; defence: string; pr
   { name: "Aggregate probe via Text-to-SQL", category: "aggregation", as: "HOD", defence: "SELECT-only + RLS + masked view", proof: "in progress" },
 ];
 
-const PROOF_TONE: Record<Proof, "brand" | "default" | "warn"> = { pytest: "brand", demo: "default", "in progress": "warn" };
+const PROOF_TONE: Record<Proof, "brand" | "default" | "warn" | "deny"> = { pytest: "brand", demo: "default", "in progress": "warn", "red-team": "brand", failed: "deny" };
 
 // Recall@10 against exact ground truth; visible = share of the corpus the identity may read.
 const RECALL = [
@@ -43,24 +44,52 @@ function useAudit(): AuditEntry[] {
 }
 
 const ACTION_TONE: Record<AuditEntry["action"], "default" | "brand" | "warn" | "deny"> = {
-  query: "brand", login: "default", upload: "warn", source_view: "default", denied_source: "deny",
+  query: "brand", login: "default", upload: "warn", source_view: "default", denied_source: "deny", acl_change: "warn",
 };
+
+const ROLE_LABEL: Record<string, string> = { "Student (public only)": "Student", "HOD, CSE": "HOD" };
 
 export function SecurityPage() {
   const { session } = useSession();
   const user = session!.user;
   const isAdmin = user.roles.includes("admin");
-  const audit = useAudit().filter((e) => isAdmin || e.userEmail === user.email);
+  const localAudit = useAudit().filter((e) => isAdmin || e.userEmail === user.email);
+  const [evalData, setEvalData] = useState<EvalResults | null>(null);
+  const [liveAudit, setLiveAudit] = useState<AuditEntry[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchEval(session!).then((e) => alive && setEvalData(e));
+    fetchAudit(session!).then((a) => alive && setLiveAudit(a));
+    return () => {
+      alive = false;
+    };
+  }, [session]);
+
+  const audit = liveAudit ?? localAudit;
+  const tests = evalData?.tests ? { passed: evalData.tests.passed, total: evalData.tests.passed + evalData.tests.failed } : RLS_TESTS;
+  const red = evalData?.redteam;
+  const attacks = red
+    ? red.attacks.map((a) => ({ name: a.name, category: a.category, as: a.persona, defence: a.defence, proof: (a.passed ? "red-team" : "failed") as Proof }))
+    : ATTACKS;
+  const recall = evalData?.recall
+    ? Object.entries(evalData.recall.identities).map(([role, v]) => ({
+        role: ROLE_LABEL[role] ?? role, visible: v.visible_share,
+        post: v.recall_at_10.post_filter, strict: v.recall_at_10.rls_strict, iterative: v.recall_at_10.rls_iterative,
+      }))
+    : RECALL;
+  const studentRecall = recall[0];
+  const p95 = evalData?.recall?.identities["Student (public only)"]?.latency_ms.rls_iterative.p95;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
       <SectionTitle eyebrow="Proof, not promises" title="Security & evaluation" />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Retrieval-layer tests (pytest)" value={`${RLS_TESTS.passed}/${RLS_TESTS.total}`} hint="ACL matrix, forged ctx, pooling, privileges" tone="brand" />
+        <Stat label="Backend tests (pytest)" value={`${tests.passed}/${tests.total}`} hint={red ? `incl. ${red.total} red-team attacks · ${evalData?.tests?.at?.slice(0, 10) ?? ""}` : "ACL matrix, forged ctx, pooling, privileges"} tone="brand" />
         <Stat label="Forbidden documents exposed" value="0/32" hint="canary matrix · 9 identities × 6 documents" tone="brand" />
-        <Stat label="Recall@10, public-only user" value="87%" hint="iterative HNSW scan · 5% with post-filtering" tone="brand" />
-        <Stat label="p95 secure vector query" value="16 ms" hint="RLS + HNSW · 10,000 vectors" tone="brand" />
+        <Stat label="Recall@10, public-only user" value={`${Math.round(studentRecall.iterative * 100)}%`} hint={`iterative HNSW scan · ${Math.round(studentRecall.post * 100)}% with post-filtering`} tone="brand" />
+        <Stat label="p95 secure vector query" value={`${Math.round(p95 ?? 16)} ms`} hint="RLS + HNSW · 10,000 vectors" tone="brand" />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
@@ -68,8 +97,8 @@ export function SecurityPage() {
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <h2 className="text-sm font-medium">Red-team suite</h2>
             <div className="flex gap-1.5">
-              <Chip tone="brand">
-                <CircleCheck className="size-3" /> {ATTACKS.filter((a) => a.proof === "pytest").length} proven in pytest
+              <Chip tone={red && red.passed < red.total ? "deny" : "brand"}>
+                <CircleCheck className="size-3" /> {red ? `${red.passed}/${red.total} blocked · end-to-end` : `${ATTACKS.filter((a) => a.proof === "pytest").length} proven in pytest`}
               </Chip>
             </div>
           </div>
@@ -84,7 +113,7 @@ export function SecurityPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {ATTACKS.map((a) => (
+                {attacks.map((a) => (
                   <tr key={a.name}>
                     <td className="px-4 py-2">
                       <div>{a.name}</div>
@@ -113,7 +142,7 @@ export function SecurityPage() {
               walking the graph inside the RLS-filtered query until 10 authorised rows are found.
             </p>
             <div className="mt-4 space-y-3">
-              {RECALL.map((r) => (
+              {recall.map((r) => (
                 <div key={r.role}>
                   <div className="mb-1 flex justify-between text-[11.5px]">
                     <span className="text-ink-2">

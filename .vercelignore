@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+data/
+frontend/node_modules/
+frontend/dist/
+backend/tests/
+backend/seed/files/
+backend/seed/fonts/
+backend/Dockerfile
+backend/requirements.txt
+backend/pytest.ini
+docker-compose.yml
+**/__pycache__/
+**/.pytest_cache/

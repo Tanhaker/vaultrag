@@ -1,4 +1,4 @@
-import { Database, FileText, Image as ImageIcon, ScanText, Table2, Type } from "lucide-react";
+import { Database, FileText, Image as ImageIcon, ScanText, Table2, TerminalSquare, Type } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { CLASSIFICATION, initials } from "../lib/personas";
 import type { Modality, SourceType } from "../lib/types";
@@ -61,6 +61,7 @@ export function ModalityTag({ modality }: { modality: Modality }) {
     ocr: [<ScanText key="i" className="size-3" />, "OCR"],
     caption: [<ImageIcon key="i" className="size-3" />, "vision caption"],
     record: [<Database key="i" className="size-3" />, "DB row"],
+    sql: [<TerminalSquare key="i" className="size-3" />, "live SQL"],
   };
   const [icon, label] = map[modality];
   return (

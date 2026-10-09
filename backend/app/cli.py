@@ -19,7 +19,7 @@ async def migrate() -> None:
     s = get_settings()
     passwords = {"rag_reader": s.db_reader_password, "rag_writer": s.db_writer_password}
     async with await psycopg.AsyncConnection.connect(
-        conninfo(s.db_owner_user, s.db_owner_password), autocommit=True
+        conninfo(*s.owner_credentials()), autocommit=True, prepare_threshold=None
     ) as conn:
         for role in APP_ROLES:
             exists = await (await conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,))).fetchone()
@@ -62,13 +62,40 @@ async def seed() -> None:
     await load()
 
 
+async def ingest_demo() -> None:
+    """Generate the demo documents and (re)ingest them plus every record card for the demo tenant."""
+    import mimetypes
+
+    from seed import demo_docs
+
+    from . import db
+    from .ingest.pipeline import ingest_file, ingest_records
+
+    s = get_settings()
+    files = demo_docs.generate()
+    await db.open_pools()
+    try:
+        async with db.writer_session() as conn:
+            await conn.execute("DELETE FROM documents WHERE tenant_id = %s", (s.tenant_id,))
+        for name, path in files.items():
+            cls, dept, roles = demo_docs.MANIFEST[name]
+            mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+            r = await ingest_file(tenant=s.tenant_id, filename=name, data=path.read_bytes(), mime=mime,
+                                  classification=cls, department=dept, allowed_roles=roles)
+            print(f"  {r['chunks']:3d} chunks  L{cls}  {name}  {' '.join(r.get('flags', []))}")
+        n = await ingest_records(s.tenant_id)
+        print(f"  {n:3d} record cards from students, fee_payments, employees")
+    finally:
+        await db.close_pools()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="app.cli")
-    parser.add_argument("command", choices=["migrate", "seed"])
+    parser.add_argument("command", choices=["migrate", "seed", "ingest-demo"])
     args = parser.parse_args()
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run({"migrate": migrate, "seed": seed}[args.command]())
+    asyncio.run({"migrate": migrate, "seed": seed, "ingest-demo": ingest_demo}[args.command]())
 
 
 if __name__ == "__main__":
