@@ -138,7 +138,8 @@ async def audit(user: CurrentUser, limit: int = 100) -> list[dict]:
 async def eval_latest(user: CurrentUser) -> dict:
     out = {}
     for name, path in {"recall": ROOT / "bench/results/recall.json", "redteam": ROOT / "eval/results/redteam.json",
-                       "tests": ROOT / "eval/results/pytest.json"}.items():
+                       "tests": ROOT / "eval/results/pytest.json", "grounding": ROOT / "eval/results/grounding.json",
+                       "timing": ROOT / "eval/results/timing.json"}.items():
         if path.exists():
             out[name] = json.loads(path.read_text(encoding="utf-8"))
     return out

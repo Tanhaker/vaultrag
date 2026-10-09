@@ -1,7 +1,8 @@
 import { CircleCheck, EyeOff, Loader2, Pencil, ShieldAlert, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { Button, Card, ClassBadge, SectionTitle, SourceIcon, Chip, cx } from "../components/ui";
-import { fetchDocuments, patchAcl, uploadDocument, type IngestResult, type RecordGroup } from "../lib/api";
+import { fetchDocuments, patchAcl, previewAcl, uploadDocument, type AclPreview, type IngestResult, type RecordGroup } from "../lib/api";
+import { AccessMatrix } from "../components/AccessMatrix";
 import { CHUNKS, DOCS } from "../lib/corpus";
 import { aclAllows, recordAudit } from "../lib/engine";
 import { CLASSIFICATION } from "../lib/personas";
@@ -189,6 +190,42 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: (d: Doc
   );
 }
 
+function WhatIf({ doc, acl }: { doc: Doc; acl: Pick<Doc, "classification" | "department" | "allowedRoles"> }) {
+  const { session } = useSession();
+  const [p, setP] = useState<AclPreview | null>(null);
+  useEffect(() => {
+    if (session?.mode !== "live" || acl.allowedRoles.length === 0) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      previewAcl(session, doc.id, acl).then((r) => alive && setP(r)).catch(() => alive && setP(null));
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [session, doc.id, acl]);
+  if (session?.mode !== "live") return null;
+  if (!p) return <div className="flex items-center gap-2 text-[12px] text-ink-3"><Loader2 className="size-3.5 animate-spin" /> Asking Postgres who could read this…</div>;
+  const after = p.users.filter((u) => u.after && !u.locked);
+  return (
+    <div className="space-y-2 rounded-xl bg-panel-2/55 p-3 ring-1 ring-line/60">
+      <div className="text-[12px] font-medium text-ink-3">What-if preview · evaluated by acl_check() before saving</div>
+      <div className="flex flex-wrap gap-1">
+        {after.map((u) => <Chip key={u.id} tone={u.before ? "default" : "brand"}>{u.name}</Chip>)}
+        {after.length === 0 && <span className="text-[12px] text-ink-3">Nobody but explicit grants.</span>}
+      </div>
+      {(p.gains.length > 0 || p.loses.length > 0) ? (
+        <div className="space-y-0.5 text-[12px]">
+          {p.gains.length > 0 && <div className="text-brand">+ gains access: {p.gains.join(", ")}</div>}
+          {p.loses.length > 0 && <div className="text-deny">− loses access instantly: {p.loses.join(", ")}</div>}
+        </div>
+      ) : (
+        <div className="text-[12px] text-ink-3">No change in who can read it.</div>
+      )}
+    </div>
+  );
+}
+
 function AclDrawer({ doc, onClose, onSave, error }: { doc: Doc; onClose: () => void; onSave: (v: Pick<Doc, "classification" | "department" | "allowedRoles">) => void; error?: string | null }) {
   const [acl, setAcl] = useState({ classification: doc.classification, department: doc.department, allowedRoles: doc.allowedRoles });
   const chunks = doc.chunks ?? CHUNKS.filter((c) => c.docId === doc.id).length;
@@ -208,6 +245,7 @@ function AclDrawer({ doc, onClose, onSave, error }: { doc: Doc; onClose: () => v
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-4">
           <AclFields value={acl} onChange={setAcl} />
+          <WhatIf doc={doc} acl={acl} />
           {doc.allowedUsers.length > 0 && (
             <div>
               <div className="mb-1.5 text-xs text-ink-2">Explicit user grants</div>
@@ -246,6 +284,8 @@ export function KnowledgePage() {
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState<Doc | null>(null);
   const [aclError, setAclError] = useState<string | null>(null);
+  const [view, setView] = useState<"sources" | "matrix">("sources");
+  const showMatrix = isAdmin && session!.mode === "live";
 
   const load = useCallback(async () => {
     try {
@@ -294,6 +334,21 @@ export function KnowledgePage() {
         )}
       </SectionTitle>
 
+      {showMatrix && (
+        <div className="mb-4 flex gap-1 rounded-lg border border-line bg-panel p-1 sm:inline-flex">
+          {([["sources", "Sources"], ["matrix", "Access matrix"]] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setView(k)}
+              className={cx("flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-[13px]", view === k ? "bg-panel-2 text-ink ring-1 ring-line-2" : "text-ink-3 hover:text-ink-2")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {showMatrix && view === "matrix" ? <AccessMatrix /> : <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-lg border border-line bg-panel p-1">
           {FILTERS.map((f) => (
@@ -401,6 +456,7 @@ export function KnowledgePage() {
           </table>
         </div>
       </Card>
+      </>}
 
       {uploading && (
         <UploadModal

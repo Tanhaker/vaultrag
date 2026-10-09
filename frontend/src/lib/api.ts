@@ -2,7 +2,7 @@ import { CHUNKS, DOCS, PAGE_FILLER, docById } from "./corpus";
 import { aclAllows, ask as demoAsk, recordAudit } from "./engine";
 import { DEMO_PASSWORD, personaFor, toUser } from "./personas";
 import { mockRecords, TOTALS, type RecordKind, type Row } from "./records";
-import type { Answer, AuditEntry, Chunk, Citation, Doc, SourceData, User } from "./types";
+import type { Answer, AuditEntry, Chunk, Citation, Doc, PipelineStep, Receipt, SourceData, User } from "./types";
 
 export type Mode = "live" | "demo";
 
@@ -61,6 +61,7 @@ export async function login(email: string, password: string): Promise<Session> {
       body: JSON.stringify({ email, password }),
     });
     if (r.status === 401) throw new Error("Invalid email or password");
+    if (r.status === 403) throw new Error("This account is locked. Contact an administrator.");
     if (r.ok) {
       const body = await r.json();
       return { user: body.user, token: body.access_token, mode: "live" };
@@ -83,10 +84,58 @@ export function sessionFor(email: string): Promise<Session> {
   return personaSessions.get(email)!;
 }
 
+export interface AskOptions {
+  verbatim?: boolean;
+  history?: { question: string }[];
+}
+
 /** Ask through the real pipeline when connected; the in-browser engine otherwise. */
-export async function ask(question: string, s: Session): Promise<Answer> {
-  if (live(s)) return call<Answer>("/query", s, { method: "POST", body: JSON.stringify({ question }) });
+export async function ask(question: string, s: Session, opts: AskOptions = {}): Promise<Answer> {
+  if (live(s)) {
+    return call<Answer>("/query", s, {
+      method: "POST",
+      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [] }),
+    });
+  }
   return demoAsk(question, s.user);
+}
+
+/** Streamed variant: onStep fires as each pipeline stage finishes on the server (server-sent
+ *  events). Falls back to the plain request if the stream can't be opened or breaks. */
+export async function askStream(question: string, s: Session, opts: AskOptions, onStep: (step: PipelineStep) => void): Promise<Answer> {
+  if (!live(s)) return demoAsk(question, s.user);
+  let r: Response;
+  try {
+    r = await fetch(`${BASE}/query/stream`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${s.token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [] }),
+    });
+  } catch {
+    return ask(question, s, opts);
+  }
+  if (r.status === 429) throw new ApiError(429, "Too many questions in a short time. Wait a minute and try again.");
+  if (!r.ok || !r.body) return ask(question, s, opts);
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let cut: number;
+    while ((cut = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, cut);
+      buf = buf.slice(cut + 2);
+      const data = frame.split("\n").filter((l) => l.startsWith("data: ")).map((l) => l.slice(6)).join("\n");
+      if (!data) continue;
+      const ev = JSON.parse(data);
+      if (ev.type === "step") onStep({ key: ev.key, label: ev.label, detail: ev.detail, ms: ev.ms });
+      else if (ev.type === "answer") return ev.answer as Answer;
+      else if (ev.type === "error") throw new ApiError(ev.status ?? 500, ev.detail ?? "Pipeline error");
+    }
+  }
+  return ask(question, s, opts);
 }
 
 /** Resolve what the source viewer needs for a citation (RLS re-checked server-side when live). */
@@ -159,7 +208,40 @@ export async function fetchAudit(s: Session): Promise<AuditEntry[] | null> {
   }
 }
 
+export interface GroundingRow {
+  as: string;
+  q: string;
+  expect: "answer" | "refuse";
+  refused: boolean;
+  mode: string;
+  latencyMs: number;
+  cited: string[];
+  decision_ok: boolean;
+  fact_ok?: boolean;
+  hit_at_5?: boolean;
+  citation_precision?: number;
+}
+
+export interface Grounding {
+  at: string;
+  mode: string;
+  summary: {
+    cases: number; decision_accuracy: number; answered_when_expected: string; refused_when_expected: string;
+    citation_precision: number; fact_recall: number; hit_at_5: number; groundedness: number;
+    verbatim_sentences: number; p50_ms: number; p95_ms: number;
+  };
+  rows: GroundingRow[];
+}
+
+export interface TimingGroup { n: number; median_ms: number; mean_ms: number; p95_ms: number; stdev_ms: number; refused: number }
+export interface Timing {
+  at: string; persona: string; repeats: number; forbidden: TimingGroup; missing: TimingGroup;
+  median_gap_ms: number; p_value: number; identical_refusal_text: boolean; verdict: string;
+}
+
 export interface EvalResults {
+  grounding?: Grounding;
+  timing?: Timing;
   tests?: { passed: number; failed: number; at: string };
   redteam?: { passed: number; total: number; at: string; attacks: { name: string; category: string; persona: string; defence: string; passed: boolean; detail: string }[] };
   recall?: { pgvector: string; chunks: number; queries: number; identities: Record<string, { visible_share: number; recall_at_10: Record<string, number>; latency_ms: Record<string, { p50: number; p95: number }> }> };
@@ -218,6 +300,98 @@ export async function fetchXray(s: Session): Promise<Xray> {
     source: "demo",
   };
 }
+
+// --- trust centre -------------------------------------------------------------------------
+
+export interface ReceiptCheck {
+  signature: boolean;
+  answerMatches: boolean | null;
+  sources: { n: number; title: string; status: "unchanged" | "changed" | "not-visible" | "live-query" }[];
+  verdict: "valid" | "forged" | "stale";
+}
+
+export const verifyReceipt = (s: Session, receipt: Receipt, sentences?: string[]) =>
+  call<ReceiptCheck>("/receipts/verify", s, { method: "POST", body: JSON.stringify({ receipt, sentences }) });
+
+export interface PlanNode {
+  depth: number; node: string; index: string | null; relation: string | null; filter: string | null; order: string | null;
+  rows: number | null; loops: number | null; removed: number | null; ms: number | null; subplan: string | null;
+}
+export interface PlanRun {
+  text: string; nodes: PlanNode[]; executionMs: number; planningMs: number; scanNode: string | null;
+  index: string | null; rlsFilter: string | null; removedByFilter: number; scanned: number;
+}
+export interface QueryPlan {
+  question: string; dbRole: string; planner: PlanRun; hnsw: PlanRun;
+  returned: { iterative: number; strict: number; k: number }; visibleChunks: number;
+}
+
+export const fetchPlan = (s: Session, question: string) =>
+  call<QueryPlan>("/security/plan", s, { method: "POST", body: JSON.stringify({ question }) });
+
+export interface AclExplain { allowed: boolean; tenant: boolean; grant: boolean; clearance: boolean; role: boolean; dept: boolean }
+export interface AccessMatrix {
+  users: { id: string; email: string; name: string; roles: string[]; department: string | null; clearance: number; depts: string[]; locked: boolean }[];
+  documents: { id: string; title: string; sourceType: string; classification: number; department: string | null; allowedRoles: string[] }[];
+  cells: Record<string, Record<string, AclExplain>>;
+  source: string;
+}
+
+export const fetchMatrix = (s: Session) => call<AccessMatrix>("/access/matrix", s);
+
+export interface AclPreview {
+  users: { id: string; name: string; email: string; locked: boolean; before: boolean; after: boolean }[];
+  gains: string[];
+  loses: string[];
+}
+
+export const previewAcl = (s: Session, docId: string, acl: { classification: number; department: string | null; allowedRoles: string[] }) =>
+  call<AclPreview>("/access/preview", s, { method: "POST", body: JSON.stringify({ docId, ...acl }) });
+
+export interface Metrics {
+  scope: "tenant" | "you";
+  hours: number;
+  totals: {
+    queries: number; refused: number; cache_hits: number; denied_sources: number; dlp_blocks: number; uploads: number;
+    acl_changes: number; llm_calls: number; users: number; p50: number | null; p95: number | null;
+  };
+  modes: { mode: string; n: number }[];
+  series: { hour: string; queries: number; refused: number; llm: number }[];
+  models: { model: string; calls: number }[];
+  topQuestions: { query: string; n: number; refused: boolean }[];
+  budget: { today: number; limit: number; perUser10min: number; queriesPer10min: number; chain: string[]; parked: Record<string, number>; enabled: boolean };
+}
+
+export const fetchMetrics = (s: Session, hours = 24) => call<Metrics>(`/security/metrics?hours=${hours}`, s);
+
+export interface Alerts {
+  alerts: { userId: string; name: string; email: string; roles: string[]; locked: boolean; queries: number; refusals: number;
+            denied: number; dlp: number; score: number; level: "low" | "medium" | "high"; lastAt: string }[];
+  locked: { userId: string; name: string; email: string }[];
+  window: string;
+  rule: string;
+}
+
+export const fetchAlerts = (s: Session) => call<Alerts>("/security/alerts", s);
+export const lockUser = (s: Session, userId: string, reason: string) =>
+  call<{ locked: boolean }>(`/admin/users/${userId}/lock`, s, { method: "POST", body: JSON.stringify({ reason }) });
+export const unlockUser = (s: Session, userId: string) =>
+  call<{ locked: boolean }>(`/admin/users/${userId}/unlock`, s, { method: "POST" });
+
+export interface AuditChain { entries: number; intact: boolean; first_bad_id: number | null; head: string; walked_to: string }
+export const fetchAuditChain = (s: Session) => call<AuditChain>("/security/audit-chain", s);
+
+export interface SalaryStat { department: string; employees: number; avg_salary: number | null; suppressed: boolean }
+export async function fetchSalaryStats(s: Session): Promise<{ count: number; rows: SalaryStat[] } | null> {
+  if (!live(s)) return null;
+  try {
+    return await call("/records/salary-stats", s);
+  } catch {
+    return null;
+  }
+}
+
+export const isLive = live;
 
 export { docById };
 export type { Chunk };

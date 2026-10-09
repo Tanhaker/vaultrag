@@ -28,14 +28,16 @@ async def source(chunk_id: str, user: CurrentUser) -> dict:
         await conn.execute(
             "INSERT INTO audit_log (tenant_id, user_id, action, query) VALUES (%s, %s, %s, %s)",
             (user.tid, user.uid, action, f"GET /source/{chunk_id}"))
-        if not row:
-            raise HTTPException(404, "Not found")
-        blocks = await (await conn.execute(
-            "SELECT id, document_id, modality, content, page, bbox, row_ref, meta FROM chunks"
-            " WHERE document_id = %s AND page IS NOT DISTINCT FROM %s ORDER BY ord",
-            (row["document_id"], row["page"]))).fetchall()
-        blob = await (await conn.execute(
-            "SELECT mime, width, height, data FROM document_blobs WHERE document_id = %s", (row["document_id"],))).fetchone()
+        if row:
+            blocks = await (await conn.execute(
+                "SELECT id, document_id, modality, content, page, bbox, row_ref, meta FROM chunks"
+                " WHERE document_id = %s AND page IS NOT DISTINCT FROM %s ORDER BY ord",
+                (row["document_id"], row["page"]))).fetchall()
+            blob = await (await conn.execute(
+                "SELECT mime, width, height, data FROM document_blobs WHERE document_id = %s", (row["document_id"],))).fetchone()
+    # Raised after the transaction commits, so the denied attempt stays in the audit log.
+    if not row:
+        raise HTTPException(404, "Not found")
     return {
         "chunk": chunk_view(row),
         "doc": doc_view(row),

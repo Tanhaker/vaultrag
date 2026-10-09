@@ -68,6 +68,32 @@ export interface Sentence {
   cites: number[];
   removed?: boolean;
   reason?: string;
+  /** How the verifier accepted it: quoted verbatim, judged entailed by the model, or figures checked. */
+  check?: "verbatim" | "entailed" | "numeric";
+}
+
+export interface Receipt {
+  v: number;
+  answer_id: string;
+  issued_at: string;
+  user: string;
+  question_sha256: string;
+  answer_sha256: string;
+  mode: string;
+  model: string | null;
+  kb_version: number | null;
+  citations: { n: number; chunk_id: string; title: string; content_sha256: string }[];
+  sig: string;
+}
+
+export interface LlmUsage {
+  allowed: boolean;
+  reason: string;
+  calls: number;
+  model: string | null;
+  today: number;
+  budget: number;
+  rateLimited: string[];
 }
 
 export interface PipelineStep {
@@ -91,6 +117,11 @@ export interface Answer {
   latencyMs: number;
   at: string;
   mode?: "llm" | "extractive" | "sql" | "refused";
+  rewritten?: string | null;
+  dlp?: { blocked: boolean; redacted: number; canaries: string[] };
+  cache?: "memory" | "postgres" | null;
+  llm?: LlmUsage;
+  receipt?: Receipt;
 }
 
 export interface SourceData {
@@ -105,7 +136,7 @@ export interface AuditEntry {
   at: string;
   userEmail: string;
   userName: string;
-  action: "query" | "login" | "upload" | "source_view" | "denied_source" | "acl_change";
+  action: "query" | "login" | "upload" | "source_view" | "denied_source" | "acl_change" | "dlp_block" | "lock_user" | "unlock_user";
   detail: string;
   chunks: number;
   filtered: number;

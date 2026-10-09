@@ -54,9 +54,10 @@ VERIFY_SCHEMA = {
 
 SQL_SYSTEM = """You translate questions into one read-only PostgreSQL SELECT statement.
 Only these relations exist; use no others and no functions except count, avg, sum, min, max, round, coalesce, lower, upper:
-  students(id uuid, enrollment_no text, name text, department text, semester int, cgpa numeric, attendance_pct numeric)
-  fee_payments(id uuid, student_id uuid -> students.id, academic_year text, amount_due numeric, amount_paid numeric, due_date date, status text)  -- status: paid|partial|pending|overdue
-  employees_secure(id uuid, employee_code text, name text, department text, designation text, email text, joined_on date, salary numeric, appraisal_rating int, appraisal_remarks text)
+  students_secure(id uuid, enrollment_no text, name text, department text, semester int, cgpa numeric, attendance_pct numeric, email text, phone text)  -- contact columns may be masked (NULL)
+  fee_payments(id uuid, student_id uuid -> students_secure.id, academic_year text, amount_due numeric, amount_paid numeric, due_date date, status text)  -- status: paid|partial|pending|overdue
+  employees_secure(id uuid, employee_code text, name text, department text, designation text, email text, joined_on date, salary numeric, appraisal_rating int, appraisal_remarks text)  -- pay columns may be masked (NULL)
+  salary_stats(department text, employees int, avg_salary numeric, suppressed boolean)  -- use this for any question about pay levels
 Departments are 'CSE', 'MECH', 'CIVIL', 'EC'. Never filter by the current user: row security is applied by the database.
 Return at most 50 rows. If the question cannot be answered from these relations, return an empty sql string."""
 
@@ -96,9 +97,10 @@ def _sources_block(sources: list[dict]) -> str:
     return "\n".join(f'<source id="{s["n"]}" title="{s["title"]}">\n{s["text"]}\n</source>' for s in sources)
 
 
-async def answer(question: str, sources: list[dict]) -> dict:
+async def answer(question: str, sources: list[dict], context: str | None = None) -> dict:
     _ensure_enabled()
-    prompt = f"{_sources_block(sources)}\n\nQuestion: {question}"
+    earlier = f"Earlier in this conversation the user asked: {context}\n" if context else ""
+    prompt = f"{_sources_block(sources)}\n\n{earlier}Question: {question}"
     out = await gemini.generate(ANSWER_SYSTEM, [{"text": prompt}], schema=ANSWER_SCHEMA)
     return out  # type: ignore[return-value]
 

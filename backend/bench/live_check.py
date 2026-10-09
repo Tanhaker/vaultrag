@@ -218,6 +218,65 @@ async def main(base: str) -> int:
               "eval results published", f"tests {ev.get('tests', {}).get('passed')} · red-team "
               f"{ev.get('redteam', {}).get('passed')}/{ev.get('redteam', {}).get('total')}")
 
+        print("\n# Trust layer")
+        r = await c.post(f"{api}/query/stream", headers=h(STU),
+                         json={"question": "When is the robotics workshop?", "verbatim": True})
+        frames = [ln for ln in r.text.split("\n") if ln.startswith("data: ")]
+        events = [json.loads(ln[6:]) for ln in frames]
+        steps = [e for e in events if e.get("type") == "step"]
+        final = next((e["answer"] for e in events if e.get("type") == "answer"), None)
+        check(r.status_code == 200 and len(steps) >= 5 and final is not None and not final["refused"],
+              "streamed answer: live step events, then the answer", f"{len(steps)} step events")
+        if final:
+            kept = [x["text"] for x in final["sentences"] if not x.get("removed")]
+            v = (await c.post(f"{api}/receipts/verify", headers=h(STU), json={"receipt": final["receipt"], "sentences": kept})).json()
+            check(v["verdict"] == "valid", "signed receipt verifies against the live sources")
+            forged = {**final["receipt"], "answer_sha256": "0" * 64}
+            v = (await c.post(f"{api}/receipts/verify", headers=h(STU), json={"receipt": forged})).json()
+            check(v["verdict"] == "forged", "edited receipt is rejected")
+        p = (await c.post(f"{api}/security/plan", headers=h(STU), json={"question": "CSE department budget"})).json()
+        check("acl_check" in (p.get("planner", {}).get("rlsFilter") or "") and p["hnsw"].get("index") == "chunks_embedding_hnsw",
+              "EXPLAIN: acl_check() inside the scan, HNSW plan available",
+              f"planner={p['planner']['scanNode']} removed={p['planner']['removedByFilter']} iterative={p['returned']['iterative']}/40 strict={p['returned']['strict']}/40")
+        m = (await c.get(f"{api}/access/matrix", headers=h(ADM))).json()
+        cells = m["cells"]
+        stu_id = next(u["id"] for u in m["users"] if u["email"] == STU)
+        budget_id = next(d["id"] for d in m["documents"] if d["title"].startswith("CSE Department Budget"))
+        check(cells[stu_id][budget_id]["allowed"] is False and len(m["users"]) == 8, "access matrix from acl_check()")
+        r = await c.get(f"{api}/access/matrix", headers=h(STU))
+        check(r.status_code == 403, "access matrix is admin-only")
+        pv = (await c.post(f"{api}/access/preview", headers=h(ADM),
+                           json={"docId": budget_id, "classification": 2, "department": "CSE", "allowedRoles": ["finance"]})).json()
+        check(pv["loses"] == ["Dr. Rajesh Trivedi"], "what-if preview names who would lose access", ", ".join(pv["loses"]))
+        mt = (await c.get(f"{api}/security/metrics", headers=h(ADM))).json()
+        check(mt["scope"] == "tenant" and mt["totals"]["queries"] > 0 and "chain" in mt["budget"], "ops metrics (tenant scope for admin)",
+              f"{mt['totals']['queries']} questions · AI today {mt['budget']['today']}/{mt['budget']['limit']}")
+        mt = (await c.get(f"{api}/security/metrics", headers=h(STU))).json()
+        check(mt["scope"] == "you", "ops metrics scoped to the caller by RLS for non-admins")
+        ch = (await c.get(f"{api}/security/audit-chain", headers=h(ADM))).json()
+        check(ch.get("intact") is True and ch.get("entries", 0) > 0, "audit hash chain intact", f"{ch.get('entries')} entries")
+        al = (await c.get(f"{api}/security/alerts", headers=h(ADM))).json()
+        check(isinstance(al.get("alerts"), list), "probing alerts", f"{len(al['alerts'])} identities active in the last hour")
+        s1 = (await c.get(f"{api}/records/students", headers=h(FAC))).json()
+        check(s1["count"] > 0 and all(r["phone"] is None for r in s1["rows"]) and any(r["email"] for r in s1["rows"]),
+              "faculty sees student emails but phone numbers are masked")
+        ss = (await c.get(f"{api}/records/salary-stats", headers=h(HOD))).json()
+        check([r["department"] for r in ss["rows"]] == ["CSE"] and ss["rows"][0]["avg_salary"] is not None,
+              "HOD gets only their department's k-anonymous average", f"{ss['rows'][0]['employees']} staff")
+        ss = (await c.get(f"{api}/records/salary-stats", headers=h(STU))).json()
+        check(ss["count"] == 0, "students get no pay statistics")
+        r = await c.post(f"{api}/admin/users/{stu_id}/lock", headers=h(ADM), json={"reason": "live check"})
+        try:
+            locked_rows = (await c.get(f"{api}/records/students", headers=h(STU))).json()["count"]
+            check(r.status_code == 200 and locked_rows == 0, "kill switch: locked account's live token reads 0 rows")
+        finally:
+            await c.post(f"{api}/admin/users/{stu_id}/unlock", headers=h(ADM))
+        check((await c.get(f"{api}/records/students", headers=h(STU))).json()["count"] == 1, "unlock restores access")
+        r = await c.get(base)
+        csp = r.headers.get("content-security-policy", "")
+        check("frame-ancestors 'none'" in csp and r.headers.get("x-content-type-options") == "nosniff",
+              "security headers on the site (CSP, nosniff, frame denial)")
+
     failed = [r for r in results if not r[0]]
     print(f"\n{len(results) - len(failed)}/{len(results)} checks passed")
     return 1 if failed else 0

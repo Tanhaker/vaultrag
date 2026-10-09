@@ -71,6 +71,8 @@ async def embed(texts: list[str], task: str, dim: int, *, wait_budget: float = 0
         while True:
             try:
                 data = await _post(f"models/{model}:batchEmbedContents", body)
+                if (u := _usage.get()) is not None:
+                    u.embeds += 1
                 break
             except RateLimited as e:
                 delay = min(max(e.retry_after or 20.0, 2.0) + 1.0, 65.0)
@@ -99,6 +101,37 @@ def _gen_config(schema: dict | None, temperature: float, max_tokens: int, model:
 # and the next one in the chain takes over. Per process; a cold instance re-learns with one 429.
 _parked: dict[str, float] = {}
 _used: ContextVar[str | None] = ContextVar("gemini_model", default=None)
+
+
+class Usage:
+    """Calls made while answering one request: feeds the quota guard and the ops dashboard."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []    # successful generations, by model
+        self.limited: list[str] = []  # models that answered 429
+        self.embeds = 0               # embedding requests
+
+    def as_meta(self) -> dict:
+        models: dict[str, int] = {}
+        for m in self.calls:
+            models[m] = models.get(m, 0) + 1
+        return {"llm_calls": len(self.calls), "models": models, "rate_limited": sorted(set(self.limited)),
+                "embed_calls": self.embeds}
+
+
+_usage: ContextVar[Usage | None] = ContextVar("gemini_usage", default=None)
+
+
+def begin_usage() -> Usage:
+    u = Usage()
+    _usage.set(u)
+    return u
+
+
+def parked() -> dict[str, int]:
+    """Models this instance is currently skipping, with seconds until they are retried."""
+    now = time.time()
+    return {m: int(t - now) for m, t in _parked.items() if t > now}
 
 
 def last_model() -> str | None:
@@ -138,9 +171,13 @@ async def generate(system: str, parts: list[dict], *, schema: dict | None = None
             text = _text_of(await _post(f"models/{model}:generateContent", body))
             out = text if schema is None else json.loads(text)
             _used.set(model)
+            if (u := _usage.get()) is not None:
+                u.calls.append(model)
             return out
         except RateLimited as e:
             _parked[model] = time.time() + min(e.retry_after or 60.0, 86400.0)
+            if (u := _usage.get()) is not None:
+                u.limited.append(model)
             last = e
         except json.JSONDecodeError:
             last = LLMUnavailable(f"{model}: non-JSON output")

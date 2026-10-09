@@ -1,8 +1,8 @@
 """Structured records, read through rag_reader.
 
 These queries deliberately have no WHERE clause on the user. Row scope and column
-masking are applied by Postgres (RLS policies and the employees_secure view), so a
-missing filter in application code cannot leak data.
+masking are applied by Postgres (RLS policies and the students_secure, employees_secure and
+salary_stats views), so a missing filter in application code cannot leak data.
 """
 
 from fastapi import APIRouter
@@ -21,8 +21,8 @@ async def _rows(conn, query: str) -> dict:
 async def students(conn: ReaderConn) -> dict:
     return await _rows(
         conn,
-        "SELECT id, enrollment_no, name, department, semester, cgpa, attendance_pct"
-        "  FROM students ORDER BY department, enrollment_no",
+        "SELECT id, enrollment_no, name, department, semester, cgpa, attendance_pct, email, phone"
+        "  FROM students_secure ORDER BY department, enrollment_no",
     )
 
 
@@ -45,3 +45,9 @@ async def employees(conn: ReaderConn) -> dict:
         "       salary, appraisal_rating, appraisal_remarks"
         "  FROM employees_secure ORDER BY department, employee_code",
     )
+
+
+@router.get("/salary-stats")
+async def salary_stats(conn: ReaderConn) -> dict:
+    """Aggregate-only pay: department averages, withheld below k = 5 employees."""
+    return await _rows(conn, "SELECT department, employees, avg_salary, suppressed FROM salary_stats ORDER BY department")

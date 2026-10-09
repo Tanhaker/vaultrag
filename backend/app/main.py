@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
 from .ai.embeddings import provider
-from .api import auth, documents, query, records, source, xray
+from .api import auth, documents, query, records, source, trust, xray
 from .config import get_settings
 
 
@@ -24,7 +24,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-for r in (auth.router, records.router, xray.router, query.router, source.router, documents.router):
+for r in (auth.router, records.router, xray.router, query.router, source.router, documents.router, trust.router):
     app.include_router(r)
 
 

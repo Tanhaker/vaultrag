@@ -1,4 +1,4 @@
-"""python -m app.cli migrate | seed"""
+"""python -m app.cli migrate | seed | ingest-demo | register-canaries | warm-cache"""
 
 import argparse
 import asyncio
@@ -87,15 +87,77 @@ async def ingest_demo() -> None:
         print(f"  {n:3d} record cards from students, fee_payments, employees")
     finally:
         await db.close_pools()
+    await register_canaries()
+
+
+async def register_canaries() -> None:
+    """Map the demo tripwire tokens to their documents (also covers scans whose OCR missed them)."""
+    from seed import demo_docs
+
+    from . import db
+
+    s = get_settings()
+    await db.open_pools()
+    try:
+        async with db.writer_session() as conn:
+            for token, title in demo_docs.CANARIES.items():
+                row = await (await conn.execute(
+                    "SELECT id FROM documents WHERE tenant_id = %s AND title = %s", (s.tenant_id, title))).fetchone()
+                if row:
+                    await conn.execute(
+                        "INSERT INTO canaries (token, tenant_id, document_id) VALUES (%s, %s, %s)"
+                        " ON CONFLICT (token) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, document_id = EXCLUDED.document_id",
+                        (token, s.tenant_id, row["id"]))
+                    print(f"  canary {token} -> {title}")
+    finally:
+        await db.close_pools()
+
+
+# Questions the live demo uses, per persona. Warming spends the AI quota once; afterwards every
+# server instance answers them from the Postgres cache until a document or ACL changes.
+SUGGESTED = [  # frontend/src/lib/corpus.ts SUGGESTED_QUESTIONS: the cache keys on the exact text
+    "What is the CSE department budget for 2026-27?",
+    "Who has pending fee payments?",
+    "What is the minimum attendance needed to sit the exam?",
+    "What is the B.Tech fee structure this year?",
+    "Summarise the faculty appraisal results.",
+    "What is Prof. Kavita Mehta's salary?",
+    "List every employee's salary.",
+]
+WARM = {email: SUGGESTED for email in ("aarav.student@atmiya.test", "hod.cse@atmiya.test", "finance@atmiya.test")}
+
+
+async def warm_cache() -> None:
+    from . import db
+    from .models import UserCtx
+    from .rag import answer
+
+    await db.open_pools()
+    try:
+        for email, questions in WARM.items():
+            async with db.writer_session() as conn:
+                u = await (await conn.execute(
+                    "SELECT id, tenant_id, email, name, roles, dept_scope, clearance, department FROM users WHERE email = %s",
+                    (email,))).fetchone()
+            if not u:
+                continue
+            user = UserCtx(uid=u["id"], tid=u["tenant_id"], email=u["email"], name=u["name"], roles=u["roles"],
+                           depts=u["dept_scope"], clearance=u["clearance"], department=u["department"])
+            for q in questions:
+                a = await answer.run(user, q)
+                print(f"  {email.split('@')[0]:14s} {a['mode']:10s} {a['llm']['calls']} AI calls  {q}")
+    finally:
+        await db.close_pools()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="app.cli")
-    parser.add_argument("command", choices=["migrate", "seed", "ingest-demo"])
+    parser.add_argument("command", choices=["migrate", "seed", "ingest-demo", "register-canaries", "warm-cache"])
     args = parser.parse_args()
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run({"migrate": migrate, "seed": seed, "ingest-demo": ingest_demo}[args.command]())
+    asyncio.run({"migrate": migrate, "seed": seed, "ingest-demo": ingest_demo, "register-canaries": register_canaries,
+                 "warm-cache": warm_cache}[args.command]())
 
 
 if __name__ == "__main__":

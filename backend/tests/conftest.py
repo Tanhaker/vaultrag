@@ -1,9 +1,16 @@
+import os
 import uuid
 
-import pytest
+# The suites ask many questions as the same personas in quick succession; the per-user rate limit
+# has its own unit test, so it is lifted here.
+os.environ.setdefault("QUERY_LIMIT_PER_10MIN", "100000")
 
-from app import db
-from app.models import UserCtx
+import psycopg  # noqa: E402
+import pytest  # noqa: E402
+
+from app import db  # noqa: E402
+from app.config import get_settings  # noqa: E402
+from app.models import UserCtx  # noqa: E402
 
 NS = uuid.UUID("0b8e1c52-3f7a-4d3b-9a61-2e5c7d9f1a04")
 TEST_TENANT = uuid.uuid5(NS, "tenant:test")
@@ -53,6 +60,11 @@ async def _cleanup(conn) -> None:
     for t in (TEST_TENANT, OTHER_TENANT):
         await conn.execute("DELETE FROM audit_log WHERE tenant_id = %s", (t,))
         await conn.execute("DELETE FROM tenants WHERE id = %s", (t,))
+    # The audit hash chain's head is readable by the owner only; the test tenants restart from genesis.
+    async with await psycopg.AsyncConnection.connect(
+        db.conninfo(*get_settings().owner_credentials()), autocommit=True, prepare_threshold=None
+    ) as owner:
+        await owner.execute("DELETE FROM audit_chain_head WHERE tenant_id = ANY(%s)", ([TEST_TENANT, OTHER_TENANT],))
 
 
 @pytest.fixture

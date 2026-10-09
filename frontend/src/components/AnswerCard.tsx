@@ -1,9 +1,16 @@
-import { ChevronDown, CircleCheck, Loader2, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, Loader2, ScanEye, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { Answer, Citation } from "../lib/types";
+import type { Answer, Citation, Sentence } from "../lib/types";
+import { ReceiptModal } from "./ReceiptModal";
 import { ClassBadge, ModalityTag, SourceIcon, cx } from "./ui";
 
-const MODE_LABEL: Record<string, string> = { llm: "Gemini · grounded", extractive: "extractive · no LLM", sql: "Text-to-SQL · RLS" };
+const MODE_LABEL: Record<string, string> = { llm: "Gemini · grounded", extractive: "verbatim · no generative model", sql: "Text-to-SQL · RLS" };
+
+const CHECK_LABEL: Record<NonNullable<Sentence["check"]>, string> = {
+  verbatim: "Quoted verbatim from the cited source",
+  entailed: "Judged entailed by the cited source (LLM verifier) and every figure found in it",
+  numeric: "Every figure found in the cited source",
+};
 
 export function CiteChip({ n, citation, active, onClick }: { n: number; citation?: Citation; active?: boolean; onClick?: () => void }) {
   return (
@@ -87,18 +94,48 @@ export function SourceRow({ c, active, onClick }: { c: Citation; active?: boolea
 interface Props {
   answer: Answer;
   live?: boolean;
+  /** The trace was already shown live while streaming: skip the replay, type the answer only. */
+  streamed?: boolean;
   compact?: boolean;
   activeCite?: string | null;
   onCite?: (c: Citation) => void;
   onDone?: () => void;
 }
 
-export function AnswerCard({ answer, live = false, compact = false, activeCite, onCite, onDone }: Props) {
+function UsageChips({ answer }: { answer: Answer }) {
+  const chips: { icon: typeof Cpu; text: string; title: string; tone?: "brand" | "warn" | "deny" }[] = [];
+  if (answer.cache) {
+    chips.push({ icon: Database, text: answer.cache === "postgres" ? "cached · Postgres" : "cached · memory", tone: "brand",
+                 title: "Served from the RLS-scoped answer cache: 0 AI calls. Invalidated by any document or ACL change." });
+  } else if (answer.llm) {
+    const l = answer.llm;
+    if (l.calls > 0) chips.push({ icon: Cpu, text: `${l.calls} AI call${l.calls === 1 ? "" : "s"}${l.model ? ` · ${l.model}` : ""}`,
+                                  title: `Tenant AI budget today: ${l.today}/${l.budget}` });
+    else if (!l.allowed && l.reason.startsWith("verbatim")) chips.push({ icon: Cpu, text: "0 AI calls · verbatim mode", title: "Quoted from sources by choice" });
+    else if (!l.allowed && l.reason) chips.push({ icon: Cpu, text: "0 AI calls · quota guard", tone: "warn", title: l.reason });
+    else chips.push({ icon: Cpu, text: "0 AI calls", title: "Answered without a generative model" });
+  }
+  if (answer.dlp?.redacted) chips.push({ icon: ScanEye, text: `${answer.dlp.redacted} redacted`, tone: "warn", title: "Egress DLP removed phone or ID numbers" });
+  if (answer.dlp?.blocked) chips.push({ icon: ShieldAlert, text: "blocked by egress DLP", tone: "deny", title: `Canary ${answer.dlp.canaries.join(", ")}` });
+  return (
+    <>
+      {chips.map((c) => (
+        <span key={c.text} title={c.title} className={cx("inline-flex items-center gap-1 font-mono text-[11px]",
+          c.tone === "brand" ? "text-brand" : c.tone === "warn" ? "text-warn" : c.tone === "deny" ? "text-deny" : "")}>
+          <c.icon className="size-3" /> {c.text}
+        </span>
+      ))}
+    </>
+  );
+}
+
+export function AnswerCard({ answer, live = false, streamed = false, compact = false, activeCite, onCite, onDone }: Props) {
   const kept = useMemo(() => answer.sentences.filter((s) => !s.removed), [answer]);
   const totalChars = useMemo(() => kept.reduce((a, s) => a + s.text.length + 1, 0), [kept]);
-  const [stepIdx, setStepIdx] = useState(live ? 0 : answer.steps.length);
+  const [receipt, setReceipt] = useState(false);
+  const [stepIdx, setStepIdx] = useState(live && !streamed ? 0 : answer.steps.length);
   const [chars, setChars] = useState(live ? 0 : totalChars);
-  const [traceCollapsed, setTraceCollapsed] = useState(!live || compact);
+  const [traceCollapsed, setTraceCollapsed] = useState(!live || compact || streamed);
 
   const streaming = stepIdx >= answer.steps.length && chars < totalChars;
   const done = stepIdx >= answer.steps.length && chars >= totalChars;
@@ -130,6 +167,13 @@ export function AnswerCard({ answer, live = false, compact = false, activeCite, 
     <div className="space-y-3">
       <PipelineTrace answer={answer} upTo={stepIdx} collapsed={traceCollapsed} onToggle={() => setTraceCollapsed((v) => !v)} />
 
+      {answer.rewritten && (
+        <div className="flex items-start gap-1.5 text-[12px] text-ink-3">
+          <CornerDownRight className="mt-0.5 size-3.5 shrink-0" />
+          <span>Follow-up read as <span className="text-ink-2">“{answer.rewritten}”</span>. Access is checked again for this turn.</span>
+        </div>
+      )}
+
       {answer.quarantined.length > 0 && stepIdx > 3 && (
         <div className="fade-up flex gap-2.5 rounded-lg bg-warn/[0.08] p-3 text-[12.5px] text-ink-2 ring-1 ring-warn/25">
           <ShieldAlert className="size-4 shrink-0 text-warn" />
@@ -157,7 +201,7 @@ export function AnswerCard({ answer, live = false, compact = false, activeCite, 
             const complete = budget >= s.text.length;
             budget -= s.text.length + 1;
             return (
-              <span key={i} className={cx(!complete && "caret")}>
+              <span key={i} className={cx(!complete && "caret")} title={complete && s.check ? CHECK_LABEL[s.check] : undefined}>
                 {shown}
                 {complete &&
                   s.cites.map((n) => (
@@ -172,9 +216,12 @@ export function AnswerCard({ answer, live = false, compact = false, activeCite, 
       {done && (
         <div className="fade-up space-y-2">
           {answer.refused ? (
-            <div className="flex items-center gap-2 text-[12px] text-ink-3">
-              <ShieldCheck className="size-3.5 text-brand" />
-              Uniform refusal: identical whether the data doesn't exist or you aren't authorised.
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-3">
+              <span className="inline-flex items-center gap-2">
+                <ShieldCheck className="size-3.5 text-brand" />
+                Uniform refusal: identical whether the data doesn't exist or you aren't authorised.
+              </span>
+              <UsageChips answer={answer} />
             </div>
           ) : (
             <>
@@ -189,6 +236,12 @@ export function AnswerCard({ answer, live = false, compact = false, activeCite, 
                 </span>
                 <span>{answer.citations.length} {answer.citations.length === 1 ? "source" : "sources"}</span>
                 {answer.mode && answer.mode !== "refused" && <span className="font-mono text-[11px]">{MODE_LABEL[answer.mode]}</span>}
+                <UsageChips answer={answer} />
+                {answer.receipt && (
+                  <button onClick={() => setReceipt(true)} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] text-brand ring-1 ring-brand/30 transition-colors hover:bg-brand-soft">
+                    <FileSignature className="size-3.5" /> Receipt
+                  </button>
+                )}
               </div>
               {!compact && (
                 <div className="grid gap-1.5">
@@ -201,6 +254,7 @@ export function AnswerCard({ answer, live = false, compact = false, activeCite, 
           )}
         </div>
       )}
+      {receipt && answer.receipt && <ReceiptModal answer={answer} onClose={() => setReceipt(false)} />}
     </div>
   );
 }

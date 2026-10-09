@@ -1,6 +1,7 @@
-"""Text-to-SQL for aggregate questions. The model proposes SQL; sqlglot validates it to a single
-SELECT over whitelisted relations with whitelisted functions; it then runs read-only as rag_reader,
-so RLS and the masking view decide which rows (and which salary values) are counted."""
+"""Text-to-SQL for aggregate questions. A matching template is used first (no model call); otherwise
+the model proposes SQL. sqlglot validates it to a single SELECT over whitelisted relations with
+whitelisted functions; it then runs read-only as rag_reader, so RLS and the masking views decide
+which rows, which contact details and which salary figures are counted."""
 
 import re
 
@@ -9,13 +10,14 @@ from sqlglot import exp
 
 from ..ai import gemini, llm
 
-ALLOWED_TABLES = {"students", "fee_payments", "employees_secure"}
+ALLOWED_TABLES = {"students", "students_secure", "fee_payments", "employees_secure", "salary_stats"}
 ALLOWED_FUNCS = (exp.Count, exp.Avg, exp.Sum, exp.Min, exp.Max, exp.Round, exp.Coalesce, exp.Lower, exp.Upper,
                  exp.Cast, exp.Case, exp.If, exp.Nullif)
 FORBIDDEN = (exp.Insert, exp.Update, exp.Delete, exp.Drop, exp.Create, exp.Alter, exp.Command, exp.Into, exp.Lock)
 
 AGG = re.compile(r"\b(average|avg|mean|how many|count|number of|total|sum of|highest|lowest|top \d+|"
-                 r"per department|by department|each department|list (all|every)|rank)\b", re.I)
+                 r"per department|by department|each department|list (all|every)|rank|"
+                 r"phone numbers?|contact (?:details|numbers?)|email addresses)\b", re.I)
 # Rules and policies are documents, not data: "minimum attendance needed", "maximum books allowed".
 POLICY = re.compile(r"\b(needed|required|must|eligib\w*|allowed|permitted|rule|policy|regulation)\b", re.I)
 TABLE = re.compile(r"\b(students?|cgpa|attendance|fees?|dues|payments?|salar(y|ies)|employees?|staff|faculty|ctc|"
@@ -68,8 +70,12 @@ TEMPLATES = [
      " GROUP BY s.department ORDER BY s.department"),
     (re.compile(r"(pending|overdue|unpaid).*(fee|dues)|(fee|dues).*(pending|overdue|status)", re.I),
      "SELECT status, COUNT(*) AS students, SUM(amount_due - amount_paid) AS balance FROM fee_payments GROUP BY status ORDER BY status"),
-    (re.compile(r"salar|ctc", re.I),
-     "SELECT department, COUNT(salary) AS visible_salaries, ROUND(AVG(salary)) AS avg_salary FROM employees_secure GROUP BY department ORDER BY department"),
+    # Pay is only ever aggregated, through the k-anonymous view (groups under 5 are suppressed).
+    (re.compile(r"salar|ctc|\bpay\b", re.I),
+     "SELECT department, employees, avg_salary, suppressed FROM salary_stats ORDER BY department"),
+    # Contact details come from the masking view: phone numbers only for the student or an admin.
+    (re.compile(r"(phone|contact|e-?mail).*students?|students?.*(phone|contact|e-?mail)", re.I),
+     "SELECT enrollment_no, name, department, email, phone FROM students_secure ORDER BY department, enrollment_no"),
 ]
 
 
@@ -80,17 +86,18 @@ def template_for(question: str) -> str | None:
     return None
 
 
-async def propose(question: str) -> tuple[str, str]:
-    """Returns (sql, source) where source is 'llm' or 'template'."""
-    try:
-        sql = await llm.text_to_sql(question)
-        if sql:
-            return sql, "llm"
-    except gemini.LLMUnavailable:
-        pass
+async def propose(question: str, use_llm: bool = True) -> tuple[str, str]:
+    """Returns (sql, source) where source is 'template' or 'llm'. Templates cost no model call."""
     t = template_for(question)
     if t:
         return t, "template"
+    if use_llm:
+        try:
+            sql = await llm.text_to_sql(question)
+            if sql:
+                return sql, "llm"
+        except gemini.LLMUnavailable:
+            pass
     raise SqlRejected("no SQL for this question")
 
 
@@ -101,5 +108,6 @@ def tables_of(sql: str) -> list[str]:
 def all_null(rows: list[dict]) -> bool:
     if not rows:
         return True
-    numeric_cols = [k for k in rows[0] if k not in ("department", "status", "name", "designation")]
+    numeric_cols = [k for k in rows[0] if k not in ("department", "status", "name", "designation", "enrollment_no",
+                                                    "employees", "suppressed", "students")]
     return all(r.get(k) in (None, 0) for r in rows for k in numeric_cols) if numeric_cols else False

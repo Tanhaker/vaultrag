@@ -1,15 +1,15 @@
-import { Loader2, Lock, ShieldCheck } from "lucide-react";
+import { Loader2, Lock, ShieldCheck, Sigma } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Card, Chip, SectionTitle, cx } from "../components/ui";
-import { fetchRecords, fetchXray, type Xray } from "../lib/api";
+import { fetchRecords, fetchSalaryStats, fetchXray, type SalaryStat, type Xray } from "../lib/api";
 import type { RecordKind, Row } from "../lib/records";
 import { useSession } from "../lib/session";
 
 const TABS: { key: RecordKind; label: string; table: string; xray: string; sql: string; cols: string[] }[] = [
   {
     key: "students", label: "Students", table: "students", xray: "students",
-    sql: "SELECT id, enrollment_no, name, department, semester, cgpa, attendance_pct\n  FROM students ORDER BY department, enrollment_no;",
-    cols: ["enrollment_no", "name", "department", "semester", "cgpa", "attendance_pct"],
+    sql: "SELECT id, enrollment_no, name, department, semester, cgpa,\n       attendance_pct, email, phone\n  FROM students_secure ORDER BY department, enrollment_no;",
+    cols: ["enrollment_no", "name", "department", "semester", "cgpa", "attendance_pct", "email", "phone"],
   },
   {
     key: "fees", label: "Fee payments", table: "fee_payments", xray: "fee_payments",
@@ -28,7 +28,7 @@ const STATUS_TONE: Record<string, "brand" | "warn" | "deny" | "default"> = { pai
 function fmt(col: string, v: Row[string]) {
   if (v === null || v === undefined) {
     return (
-      <span className="inline-flex items-center gap-1 text-ink-3" title="Masked by the employees_secure view">
+      <span className="inline-flex items-center gap-1 text-ink-3" title={col === "phone" || col === "email" ? "Masked by the students_secure view (column grants keep it off the base table too)" : "Masked by the employees_secure view"}>
         <Lock className="size-3" /> masked
       </span>
     );
@@ -43,12 +43,14 @@ export function RecordsPage() {
   const [tab, setTab] = useState(TABS[0]);
   const [data, setData] = useState<{ count: number; rows: Row[] } | null>(null);
   const [xray, setXray] = useState<Xray | null>(null);
+  const [pay, setPay] = useState<SalaryStat[] | null>(null);
 
   useEffect(() => {
     let alive = true;
     setData(null);
     fetchRecords(tab.key, session!).then((d) => alive && setData(d));
     fetchXray(session!).then((x) => alive && setXray(x));
+    if (tab.key === "employees") fetchSalaryStats(session!).then((p) => alive && setPay(p?.rows ?? null));
     return () => {
       alive = false;
     };
@@ -82,7 +84,8 @@ export function RecordsPage() {
           <pre className="overflow-x-auto rounded-lg bg-paper p-3 font-mono text-[11.5px] leading-relaxed text-ink-2">{tab.sql}</pre>
           <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">
             The handler doesn't filter by user. Postgres applies the RLS policy for the signed context
-            {tab.key === "employees" ? ", and the security-barrier view masks salary and appraisal columns" : ""}.
+            {tab.key === "employees" ? ", and the security-barrier view masks salary and appraisal columns" : ""}
+            {tab.key === "students" ? ", and the masking view hides phone numbers (and emails for some roles); rag_reader has no grant on those base columns at all" : ""}.
           </p>
         </Card>
         <Card className="flex flex-col justify-between p-4">
@@ -104,6 +107,39 @@ export function RecordsPage() {
           </div>
         </Card>
       </div>
+
+      {tab.key === "employees" && pay && (
+        <Card className="mt-4 p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[13px] font-medium">
+              <Sigma className="size-4 text-brand" /> Aggregate-only pay · <span className="font-mono text-[12px] font-normal text-ink-3">salary_stats</span>
+            </div>
+            <Chip tone="brand">k-anonymity · k = 5</Chip>
+          </div>
+          {pay.length === 0 ? (
+            <p className="text-[12.5px] text-ink-3">No department statistics are visible to you.</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {pay.map((p) => (
+                <div key={p.department} className="rounded-xl bg-paper px-3 py-2.5 ring-1 ring-line">
+                  <div className="flex items-center justify-between text-[12px] text-ink-3">
+                    <span className="font-mono">{p.department}</span>
+                    <span>{p.employees} staff</span>
+                  </div>
+                  <div className="mt-1 font-display text-[24px] tabular-nums">
+                    {p.suppressed || p.avg_salary === null ? <span className="text-[15px] text-ink-3">withheld (fewer than 5)</span> : `₹${Number(p.avg_salary).toLocaleString("en-IN")}`}
+                  </div>
+                  <div className="text-[11px] text-ink-3">average annual salary</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="mt-3 text-[12px] leading-relaxed text-ink-3">
+            Heads of department see their department's average for planning, never an individual salary. Grouping is fixed inside the view, so two
+            overlapping queries can't be subtracted to isolate one person (a differencing attack), and groups under five are withheld.
+          </p>
+        </Card>
+      )}
 
       <Card className="mt-4 overflow-hidden">
         {!data ? (

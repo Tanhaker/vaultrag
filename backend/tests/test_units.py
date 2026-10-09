@@ -74,3 +74,76 @@ def test_indian_rupee_grouping():
     assert inr(135000) == "₹1,35,000"
     assert inr(1640000) == "₹16,40,000"
     assert inr(500) == "₹500"
+
+
+# --- trust layer units ---------------------------------------------------------------------
+
+from app.rag import guard, receipts  # noqa: E402
+from app.rag.answer import _rows_sentences  # noqa: E402
+from app.rag.verify import verbatim, verify  # noqa: E402
+
+
+def test_followup_rewrite():
+    h = [{"question": "What is the CSE department budget for 2026-27?"}]
+    assert guard.rewrite_followup("What about MECH?", h) == "What is the MECH department budget for 2026-27?"
+    assert guard.rewrite_followup("and its utilisation?", h).startswith("and its utilisation (about: What is the CSE")
+    assert guard.rewrite_followup("When is the robotics workshop?", h) is None
+    assert guard.rewrite_followup("What about MECH?", []) is None
+
+
+def test_receipt_signature_and_tamper():
+    answer = {"id": "a1", "question": "q", "user": {"uid": "u1"}, "mode": "llm",
+              "sentences": [{"text": "The budget is ₹48.5 lakh.", "cites": [1]}],
+              "citations": [{"n": 1, "chunk": {"id": "c1", "modality": "text", "content": "₹48.5 lakh"},
+                             "doc": {"title": "Budget"}}]}
+    r = receipts.issue(answer, 7, "gemini-x")
+    assert receipts.check_signature(r)
+    assert r["answer_sha256"] == receipts.answer_digest(["The budget is ₹48.5 lakh."])
+    forged = {**r, "answer_sha256": receipts.answer_digest(["The budget is ₹99 lakh."])}
+    assert not receipts.check_signature(forged)
+    swapped = {**r, "citations": [{**r["citations"][0], "content_sha256": receipts.sha("other text")}]}
+    assert not receipts.check_signature(swapped)
+
+
+async def test_verbatim_quotes_skip_the_model():
+    src = {1: "A student must maintain a minimum of 75% attendance in each course to be eligible."}
+    out, method = await verify([{"text": "A student must maintain a minimum of 75% attendance in each course.", "cites": [1]}],
+                               src, use_llm=False)
+    assert out[0]["check"] == "verbatim" and not out[0].get("removed") and method.startswith("verbatim")
+    assert not verbatim("Students need 90% attendance.", list(src.values()))
+
+
+def test_row_sentences_are_deterministic_and_suppress_small_groups():
+    rows = [{"department": "CSE", "employees": 7, "avg_salary": 1450000.0, "suppressed": False},
+            {"department": "EC", "employees": 3, "avg_salary": None, "suppressed": True}]
+    s = _rows_sentences(rows)
+    assert s[0]["text"] == "CSE: employees 7, avg salary ₹14,50,000."
+    assert "withheld" in s[1]["text"] and "1450000" not in s[1]["text"]
+
+
+def test_quota_guard(monkeypatch):
+    from app.config import get_settings
+
+    st = get_settings()
+    monkeypatch.setattr(st, "gemini_api_key", "test-key")
+    monkeypatch.setattr(st, "llm_mode", "auto")
+    pf = guard.Preflight(kb_version=1, recent_queries=0, recent_llm=0, llm_today=0, cached=None)
+    assert guard.llm_allowed(pf, verbatim=False)[0]
+    assert not guard.llm_allowed(pf, verbatim=True)[0]
+    over_day = guard.Preflight(1, 0, 0, st.llm_daily_budget, None)
+    assert "daily" in guard.llm_allowed(over_day, False)[1]
+    over_user = guard.Preflight(1, 0, st.user_llm_per_10min, 0, None)
+    assert "fair-use" in guard.llm_allowed(over_user, False)[1]
+    monkeypatch.setattr(st, "query_limit_per_10min", 5)
+    guard.enforce_rate_limit(guard.Preflight(1, 4, 0, 0, None))
+    with pytest.raises(guard.RateLimitExceeded):
+        guard.enforce_rate_limit(guard.Preflight(1, 5, 0, 0, None))
+
+
+def test_template_first_and_secure_views():
+    from app.rag.sql import template_for, validate
+
+    assert "salary_stats" in template_for("What is the average salary in CSE?")
+    assert "students_secure" in template_for("List the phone numbers of CSE students")
+    with pytest.raises(SqlRejected):
+        validate("SELECT embedding FROM chunks")

@@ -1,6 +1,7 @@
-import { Eye, EyeOff, Play, ShieldOff } from "lucide-react";
+import { Eye, EyeOff, Play, ScanSearch, ShieldOff } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { AnswerCard, SourceRow } from "../components/AnswerCard";
+import { PlanModal } from "../components/PlanModal";
 import { SourceViewer } from "../components/SourceViewer";
 import { Avatar, Button, ClassBadge, SectionTitle, cx } from "../components/ui";
 import { SUGGESTED_QUESTIONS } from "../lib/corpus";
@@ -20,6 +21,7 @@ export function ComparePage() {
   const [runId, setRunId] = useState(0);
   const [xray, setXray] = useState(false);
   const [source, setSource] = useState<Citation | null>(null);
+  const [plan, setPlan] = useState<{ email: string; name: string; question: string } | null>(null);
 
   async function run(q = question) {
     if (!q.trim()) return;
@@ -128,7 +130,17 @@ export function ComparePage() {
               {xray && a && (
                 <div className="fade-up flex items-center gap-2 border-t border-dashed border-line-2 bg-panel-2/50 px-3 py-2 font-mono text-[11px] text-ink-3">
                   <ShieldOff className="size-3.5 text-deny" />
-                  RLS dropped <span className="text-deny">{a.xray.filtered}</span> of {a.xray.candidates} candidate chunks inside Postgres
+                  <span className="min-w-0 flex-1">
+                    RLS dropped <span className="text-deny">{a.xray.filtered}</span> of {a.xray.candidates} candidate chunks inside Postgres
+                  </span>
+                  {session?.mode === "live" && (
+                    <button
+                      onClick={() => setPlan({ email, name: p.name, question: a.question })}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-brand ring-1 ring-brand/30 hover:bg-brand-soft"
+                    >
+                      <ScanSearch className="size-3.5" /> EXPLAIN
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -142,6 +154,8 @@ export function ComparePage() {
           that a document exists.
         </p>
       )}
+
+      {plan && <PlanModal email={plan.email} name={plan.name} question={plan.question} onClose={() => setPlan(null)} />}
 
       {source && (
         <>

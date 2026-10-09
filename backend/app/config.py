@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     embed_wait_seconds: float = 30.0
     llm_mode: str = "auto"  # auto | off
 
+    # Quota guard (free-tier Gemini keys allow ~20 requests per model per day). Over a limit the
+    # answer is composed verbatim from sources instead of failing.
+    llm_daily_budget: int = 60          # tenant-wide generation calls per Pacific day
+    user_llm_per_10min: int = 12        # generation calls one user may trigger per 10 minutes
+    query_limit_per_10min: int = 40     # questions per user per 10 minutes (HTTP 429 above)
+    answer_cache_hours: int = 48        # Postgres answer cache lifetime (kb_version still guards it)
+
     # Vercel sets VERCEL=1; serverless functions open a connection per request instead of pooling.
     vercel: str | None = None
 

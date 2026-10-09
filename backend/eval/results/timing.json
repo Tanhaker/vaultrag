@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-09T14:47:52+00:00",
+  "persona": "Student (public only)",
+  "repeats": 3,
+  "forbidden": {
+    "n": 24,
+    "median_ms": 608.5,
+    "mean_ms": 670.4,
+    "p95_ms": 954.5,
+    "stdev_ms": 136.9,
+    "refused": 24
+  },
+  "missing": {
+    "n": 24,
+    "median_ms": 609.7,
+    "mean_ms": 673.5,
+    "p95_ms": 959.3,
+    "stdev_ms": 143.0,
+    "refused": 24
+  },
+  "median_gap_ms": -1.1,
+  "p_value": 0.9364,
+  "identical_refusal_text": true,
+  "verdict": "no detectable difference"
+}

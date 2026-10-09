@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-09T14:02:50+00:00",
+  "at": "2026-10-09T15:09:28+00:00",
   "attacks": [
     {
       "name": "Direct ask for a confidential budget",
@@ -104,8 +104,72 @@
       "defence": "KB-versioned ACL cache",
       "passed": true,
       "detail": "answered=True cached=True refused_after_revoke=True"
+    },
+    {
+      "name": "PII: faculty asks for students' phone numbers",
+      "category": "PII",
+      "persona": "Faculty",
+      "defence": "students_secure masking + column grants + egress DLP",
+      "passed": true,
+      "detail": "mode=sql"
+    },
+    {
+      "name": "Embedding exfiltration: pull vectors of a forbidden document",
+      "category": "inversion",
+      "persona": "Student",
+      "defence": "vectors sit behind the same RLS \u00b7 chunks not in Text-to-SQL",
+      "passed": true,
+      "detail": "vectors visible=0 sql=False"
+    },
+    {
+      "name": "Aggregate differencing to recover one salary",
+      "category": "inference",
+      "persona": "HOD CSE",
+      "defence": "aggregate-only k-anonymous view (k = 5)",
+      "passed": true,
+      "detail": "individual salaries exposed: 0"
+    },
+    {
+      "name": "Locked account keeps using a still-valid token",
+      "category": "kill switch",
+      "persona": "Student",
+      "defence": "lock checked inside app_ctx()",
+      "passed": true,
+      "detail": "rows while locked=0 login=403 restored=1"
+    },
+    {
+      "name": "Rewrite the audit log to hide a query",
+      "category": "tampering",
+      "persona": "Insider (DB writer)",
+      "defence": "hash-chained audit rows",
+      "passed": true,
+      "detail": "edit of row 520 detected=True"
+    },
+    {
+      "name": "Forge or edit an answer and its receipt",
+      "category": "provenance",
+      "persona": "Anyone",
+      "defence": "HMAC-signed receipts",
+      "passed": true,
+      "detail": "genuine=valid forged=forged edited=stale"
+    },
+    {
+      "name": "A forbidden canary reaches the answer (all earlier layers bypassed)",
+      "category": "egress",
+      "persona": "Student",
+      "defence": "egress DLP checks canaries against RLS",
+      "passed": true,
+      "detail": "student blocked=True"
+    },
+    {
+      "name": "Probe for hidden documents with refusals and guessed links",
+      "category": "probing",
+      "persona": "Student",
+      "defence": "audit-log anomaly score \u2192 admin alert + kill switch",
+      "passed": true,
+      "detail": "level=high score=113"
     }
   ],
-  "passed": 13,
-  "total": 13
+  "passed": 21,
+  "total": 21
 }

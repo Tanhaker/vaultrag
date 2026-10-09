@@ -1,17 +1,55 @@
-import { ArrowUp, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowUp, CircleCheck, Loader2, MessageSquarePlus, Quote, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AnswerCard } from "../components/AnswerCard";
 import { Mark } from "../components/Layout";
 import { SourceViewer } from "../components/SourceViewer";
 import { Avatar, ClassBadge, cx } from "../components/ui";
-import { ask, fetchXray, type Xray } from "../lib/api";
+import { ApiError, askStream, fetchXray, type Xray } from "../lib/api";
 import { SUGGESTED_QUESTIONS } from "../lib/corpus";
 import { ask as demoAsk, recordAudit } from "../lib/engine";
 import { roleLabel } from "../lib/personas";
 import { useSession } from "../lib/session";
-import type { Answer, Citation } from "../lib/types";
+import type { Answer, Citation, PipelineStep } from "../lib/types";
 
 const threads = new Map<string, Answer[]>();
+const streamedIds = new Set<string>();
+const VERBATIM_KEY = "vaultrag.verbatim";
+
+function loadVerbatim(): boolean {
+  try {
+    return localStorage.getItem(VERBATIM_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function LiveTrace({ question, steps }: { question: string; steps: PipelineStep[] }) {
+  return (
+    <div className="fade-up space-y-3">
+      <div className="flex justify-end">
+        <div className="max-w-[85%] rounded-[18px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[14.5px] text-paper">{question}</div>
+      </div>
+      <div className="flex gap-3">
+        <Mark className="mt-0.5 size-7 shrink-0" />
+        <div className="min-w-0 flex-1 space-y-2 rounded-xl bg-panel-2/55 px-3.5 py-3 ring-1 ring-line/60">
+          {steps.map((s, i) => (
+            <div key={`${s.key}-${i}`} className="fade-up flex items-center gap-2.5 text-xs">
+              <CircleCheck className="size-3.5 shrink-0 text-brand" />
+              <span className="w-44 shrink-0 text-[12.5px] text-ink">{s.label}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-3">{s.detail}</span>
+              <span className="font-mono text-[10.5px] tabular-nums text-ink-3">{s.ms} ms</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-2.5 text-[12.5px] text-ink-3">
+            <Loader2 className="size-3.5 shrink-0 animate-spin text-brand" />
+            {steps.length === 0 ? "Binding your signed context…" : "Running…"}
+            <span className="ml-auto font-mono text-[10.5px]">live from the server</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function XrayStrip({ xray }: { xray: Xray | null }) {
   if (!xray) return null;
@@ -45,6 +83,9 @@ export function AskPage() {
   const [busy, setBusy] = useState(false);
   const [source, setSource] = useState<Citation | null>(null);
   const [xray, setXray] = useState<Xray | null>(null);
+  const [pending, setPending] = useState<{ question: string; steps: PipelineStep[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [verbatim, setVerbatim] = useState(loadVerbatim);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,20 +98,51 @@ export function AskPage() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [thread.length]);
+  }, [thread.length, pending?.steps.length]);
+
+  function toggleVerbatim() {
+    setVerbatim((v) => {
+      try {
+        localStorage.setItem(VERBATIM_KEY, v ? "0" : "1");
+      } catch {
+        /* preference just isn't remembered */
+      }
+      return !v;
+    });
+  }
+
+  function newConversation() {
+    threads.set(user.email, []);
+    setThread([]);
+    setSource(null);
+    setError(null);
+  }
 
   async function submit(q: string) {
     const question = q.trim();
     if (!question || busy) return;
     setBusy(true);
+    setError(null);
     setInput("");
+    const history = (threads.get(user.email) ?? []).slice(-3).map((a) => ({ question: a.rewritten ?? a.question }));
+    setPending({ question, steps: [] });
     let a: Answer;
     try {
-      a = await ask(question, session!);
+      a = await askStream(question, session!, { verbatim, history }, (step) =>
+        setPending((p) => (p ? { ...p, steps: [...p.steps, step] } : p)),
+      );
+      if (session!.mode === "live") streamedIds.add(a.id);
     } catch (e) {
+      if (e instanceof ApiError && e.status === 429) {
+        setPending(null);
+        setBusy(false);
+        setError(e.message);
+        return;
+      }
       a = await demoAsk(question, user);
       a.steps.unshift({ key: "offline", label: "Backend unavailable", detail: `${String((e as Error).message ?? e).slice(0, 50)} → in-browser engine`, ms: 1 });
     }
+    setPending(null);
     const next = [...(threads.get(user.email) ?? []), a];
     threads.set(user.email, next);
     setThread(next);
@@ -102,11 +174,18 @@ export function AskPage() {
               </div>
             </div>
           </div>
-          <XrayStrip xray={xray} />
+          <div className="flex items-center gap-4">
+            <XrayStrip xray={xray} />
+            {thread.length > 0 && (
+              <button onClick={newConversation} disabled={busy} className="inline-flex items-center gap-1.5 text-[12px] text-ink-3 transition-colors hover:text-ink disabled:opacity-40">
+                <MessageSquarePlus className="size-3.5" /> New conversation
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-          {thread.length === 0 ? (
+          {thread.length === 0 && !pending ? (
             <div className="mx-auto mt-4 grid max-w-5xl gap-10 sm:mt-12 lg:grid-cols-[1fr_1.1fr] lg:gap-16">
               <div>
                 <h2 className="font-display text-[44px] leading-[1] tracking-[-0.01em] sm:text-[56px]">
@@ -146,6 +225,7 @@ export function AskPage() {
                       <AnswerCard
                         answer={a}
                         live={a.id === liveId}
+                        streamed={streamedIds.has(a.id)}
                         activeCite={source?.chunk.id ?? null}
                         onCite={openSource}
                         onDone={() => setBusy(false)}
@@ -154,12 +234,35 @@ export function AskPage() {
                   </div>
                 </div>
               ))}
+              {pending && <LiveTrace question={pending.question} steps={pending.steps} />}
               <div ref={endRef} />
             </div>
           )}
         </div>
 
         <form onSubmit={onSubmit} className="border-t border-line bg-bg/90 px-4 py-3 backdrop-blur sm:px-6">
+          {error && (
+            <div className="fade-up mx-auto mb-2 flex max-w-3xl items-center gap-2 rounded-xl bg-warn/[0.09] px-3 py-2 text-[12.5px] text-ink-2 ring-1 ring-warn/25">
+              <TriangleAlert className="size-4 shrink-0 text-warn" /> {error}
+            </div>
+          )}
+          <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center justify-between gap-2 text-[12px]">
+            <button
+              type="button"
+              onClick={toggleVerbatim}
+              aria-pressed={verbatim}
+              title="Quote the sources word for word, without a generative model. Uses no AI quota."
+              className={cx(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 transition-colors",
+                verbatim ? "bg-brand text-paper ring-brand" : "text-ink-3 ring-line-2 hover:text-ink",
+              )}
+            >
+              <Quote className="size-3.5" /> Verbatim mode {verbatim ? "on" : "off"}
+            </button>
+            {thread.length > 0 && (
+              <span className="truncate text-ink-3">Follow-ups use the previous question as context</span>
+            )}
+          </div>
           <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-[18px] bg-paper p-2 shadow-card ring-1 ring-line-2 transition-shadow focus-within:ring-2 focus-within:ring-brand">
             <textarea
               rows={1}

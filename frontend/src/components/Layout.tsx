@@ -10,7 +10,7 @@ const NAV = [
   { to: "/compare", label: "Compare" },
   { to: "/knowledge", label: "Knowledge base" },
   { to: "/records", label: "Records" },
-  { to: "/security", label: "Security" },
+  { to: "/security", label: "Trust center" },
 ];
 
 export function Mark({ className = "size-7" }: { className?: string }) {

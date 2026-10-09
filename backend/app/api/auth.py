@@ -25,7 +25,7 @@ class TokenOut(BaseModel):
 async def login(body: LoginIn) -> TokenOut:
     async with writer_session() as conn:
         cur = await conn.execute(
-            "SELECT id, tenant_id, email, name, password_hash, roles, department, clearance, dept_scope"
+            "SELECT id, tenant_id, email, name, password_hash, roles, department, clearance, dept_scope, locked_at"
             "  FROM users WHERE lower(email) = lower(%s)",
             (body.email,),
         )
@@ -36,6 +36,9 @@ async def login(body: LoginIn) -> TokenOut:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if not verify_password(body.password, row["password_hash"]):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+    if row["locked_at"] is not None:
+        # Tokens issued before the lock stop working too: app_ctx() refuses the locked uid.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is locked. Contact an administrator.")
 
     user = UserCtx(
         uid=row["id"],

@@ -11,6 +11,7 @@ from psycopg.types.json import Jsonb
 
 from ..ai import embeddings
 from ..db import writer_session
+from ..rag.guard import CANARY
 from . import records
 from .blocks import Block, chunk_blocks, looks_injected
 from .ocr import ocr_image, preview
@@ -110,6 +111,13 @@ async def ingest_file(*, tenant: UUID, filename: str, data: bytes, mime: str, cl
              allowed_roles, allowed_users or [], Jsonb(meta)),
         )
         await _insert_chunks(conn, doc_id, chunks, vectors, title)
+        # Tripwire tokens found in the text are registered, so the egress filter can tell an
+        # allowed canary (the reader may see this document) from a leaked one.
+        for token in sorted({t for c in chunks for t in CANARY.findall(c.text)}):
+            await conn.execute(
+                "INSERT INTO canaries (token, tenant_id, document_id) VALUES (%s, %s, %s)"
+                " ON CONFLICT (token) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, document_id = EXCLUDED.document_id",
+                (token, tenant, doc_id))
         if blob:
             await conn.execute(
                 "INSERT INTO document_blobs (document_id, tenant_id, mime, width, height, data) VALUES (%s, %s, 'image/jpeg', %s, %s, %s)",
