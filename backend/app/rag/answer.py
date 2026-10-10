@@ -25,6 +25,7 @@ from ..ingest.records import inr
 from ..models import UserCtx
 from . import guard, receipts
 from . import sql as sqlmod
+from . import chat as chatmod
 from . import style as stylemod
 from .retrieve import answerable, coverage, hybrid, on_subject, relevant, subject_terms, terms
 from .verify import verify
@@ -376,6 +377,32 @@ async def _embed_cached(user: UserCtx, text: str) -> tuple[list[float] | None, b
     return vec, False
 
 
+# --- small talk ------------------------------------------------------------------------------
+
+async def _small_talk(user: UserCtx, question: str, kind: str, st, pf, key: str, on_step: StepSink) -> dict:
+    """A conversational reply: no retrieval, no knowledge-base facts, so nothing to cite and nothing to leak."""
+    timer = Timer(on_step)
+    timer.step("ctx", "Bind signed DB context", f"rag_reader · clearance {user.clearance} · HMAC-SHA256")
+    timer.step("chat", "Small talk", f"{kind} · {st.label} · answered without retrieval, so no source is read or quoted")
+    texts, nudge = chatmod.reply(kind, st, user.name)
+    sentences = [{"text": t, "cites": [], "check": "chat"} for t in texts]
+    out = _finish(user, question, timer, sentences, [], [], {"candidates": 0, "visible": 0, "filtered": 0}, "chat",
+                  refusal=stylemod.refusal(st))
+    out["refused"] = False
+    out["sentences"] = sentences
+    out["groundedness"] = 1.0
+    out["mode"] = "chat"
+    out["chat"] = {"intent": kind, "nudge": nudge, "suggestions": chatmod.suggestions(user.roles) if nudge else []}
+    out["style"] = {"lang": st.lang, "tone": st.tone, "label": st.label, "detected": st.detected, "greeting": None}
+    out["rewritten"], out["dlp"], out["cache"] = None, {"blocked": False, "redacted": 0, "canaries": []}, None
+    out["llm"] = {"allowed": False, "reason": "small talk needs no model", "calls": 0, "model": None,
+                  "today": pf.llm_today, "budget": get_settings().llm_daily_budget, "rateLimited": False}
+    out["receipt"] = receipts.issue(out, pf.kb_version, None)
+    await _record(user, question, out, {"mode": "chat", "refused": False, "chat": kind, "llm_calls": 0,
+                                        "style": st.key or "en-formal"}, key=key, kbv=None, cache_layer=None)
+    return out
+
+
 # --- main entry ------------------------------------------------------------------------------
 
 async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: list[dict] | None = None,
@@ -393,6 +420,10 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
 
     pf = await guard.preflight(user, key)
     guard.enforce_rate_limit(pf)
+
+    kind = chatmod.intent(question)
+    if kind:
+        return await _small_talk(user, question, kind, st, pf, key, on_step)
 
     if use_cache and pf.kb_version is not None:
         mem = _cache.get((str(user.uid), key, pf.kb_version))

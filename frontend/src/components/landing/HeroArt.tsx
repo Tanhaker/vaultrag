@@ -1,25 +1,10 @@
-import { useEffect, useRef } from "react";
 import { Glyph } from "../Layout";
 
 /** The DefRAG seal: concentric rings with engraved text and the mark at the centre. Scroll turns the
- *  rings; the pointer tilts the mark. */
+ *  rings; the mark stays still. */
 export function HeroArt({ progress }: { progress: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const move = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect();
-      el.style.setProperty("--mx", String((e.clientX - r.left) / r.width - 0.5));
-      el.style.setProperty("--my", String((e.clientY - r.top) / r.height - 0.5));
-    };
-    window.addEventListener("pointermove", move, { passive: true });
-    return () => window.removeEventListener("pointermove", move);
-  }, []);
-
   return (
-    <div ref={ref} className="relative mx-auto aspect-square w-full max-w-[560px] select-none" aria-hidden>
+    <div className="relative mx-auto aspect-square w-full max-w-[560px] select-none" aria-hidden>
       <svg viewBox="0 0 400 400" className="absolute inset-0 size-full" style={{ transform: `rotate(${progress * 40}deg)` }}>
         <defs>
           <path id="ring-text" d="M200,200 m-168,0 a168,168 0 1,1 336,0 a168,168 0 1,1 -336,0" />
@@ -48,8 +33,7 @@ export function HeroArt({ progress }: { progress: number }) {
       </svg>
 
       {/* the mark */}
-      <div className="absolute top-1/2 left-1/2 grid size-[22%] place-items-center drop-shadow-[0_10px_30px_rgba(63,138,102,0.55)]"
-           style={{ transform: "translate(-50%, -50%) translate3d(calc(var(--mx, 0) * 18px), calc(var(--my, 0) * 18px), 0)", transition: "transform 200ms ease-out" }}>
+      <div className="absolute top-1/2 left-1/2 grid size-[22%] -translate-x-1/2 -translate-y-1/2 place-items-center drop-shadow-[0_10px_30px_rgba(63,138,102,0.55)]">
         <Glyph className="size-full" light />
       </div>
 

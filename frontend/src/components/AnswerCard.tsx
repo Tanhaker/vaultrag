@@ -1,4 +1,4 @@
-import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, HandHeart, Languages, Loader2, Scale, ScanEye, ShieldAlert, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
+import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, HandHeart, Languages, Loader2, MessagesSquare, Scale, ScanEye, ShieldAlert, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Answer, Citation, Sentence } from "../lib/types";
 import { ExplainModal } from "./ExplainModal";
@@ -11,6 +11,7 @@ const CHECK_LABEL: Record<NonNullable<Sentence["check"]>, string> = {
   verbatim: "Quoted verbatim from the cited source",
   entailed: "Judged entailed by the cited source (LLM verifier) and every figure found in it",
   numeric: "Every figure found in the cited source",
+  chat: "Small talk: no facts from the knowledge base, so nothing to cite",
 };
 
 export function CiteChip({ n, citation, active, onClick }: { n: number; citation?: Citation; active?: boolean; onClick?: () => void }) {
@@ -101,6 +102,8 @@ interface Props {
   activeCite?: string | null;
   onCite?: (c: Citation) => void;
   onDone?: () => void;
+  /** Ask a follow-up question (suggestion chips under a small-talk reply). */
+  onAsk?: (q: string) => void;
 }
 
 function UsageChips({ answer }: { answer: Answer }) {
@@ -112,6 +115,7 @@ function UsageChips({ answer }: { answer: Answer }) {
     const l = answer.llm;
     if (l.calls > 0) chips.push({ icon: Cpu, text: `${l.calls} AI call${l.calls === 1 ? "" : "s"}${l.model ? ` · ${l.model}` : ""}`,
                                   title: `Tenant AI budget today: ${l.today}/${l.budget}` });
+    else if (l.reason.startsWith("small talk")) chips.push({ icon: Cpu, text: "0 AI calls", title: "Small talk is answered without a model" });
     else if (!l.allowed && l.reason.startsWith("verbatim")) chips.push({ icon: Cpu, text: "0 AI calls · verbatim mode", title: "Quoted from sources by choice" });
     else if (!l.allowed && l.reason) chips.push({ icon: Cpu, text: "0 AI calls · quota guard", tone: "warn", title: l.reason });
     else chips.push({ icon: Cpu, text: "0 AI calls", title: "Answered without a generative model" });
@@ -177,7 +181,7 @@ function WhyButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function AnswerCard({ answer, live = false, streamed = false, compact = false, activeCite, onCite, onDone }: Props) {
+export function AnswerCard({ answer, live = false, streamed = false, compact = false, activeCite, onCite, onDone, onAsk }: Props) {
   const kept = useMemo(() => answer.sentences.filter((s) => !s.removed), [answer]);
   const totalChars = useMemo(() => kept.reduce((a, s) => a + s.text.length + 1, 0), [kept]);
   const [receipt, setReceipt] = useState(false);
@@ -270,7 +274,28 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
 
       {done && (
         <div className="fade-up space-y-2">
-          {answer.refused ? (
+          {answer.mode === "chat" ? (
+            <div className="space-y-2.5">
+              {answer.chat?.nudge && answer.chat.suggestions.length > 0 && (
+                <div>
+                  <div className="text-[13px] text-ink-2">{answer.chat.nudge}</div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {answer.chat.suggestions.map((q) => (
+                      <button key={q} onClick={() => onAsk?.(q)} disabled={!onAsk}
+                              className="rounded-full bg-paper px-3 py-1.5 text-left text-[13px] text-ink-2 ring-1 ring-line-2 transition-colors hover:text-ink hover:ring-brand">
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-3">
+                <span className="inline-flex items-center gap-1.5"><MessagesSquare className="size-3.5 text-brand" /> Small talk · no documents read, so nothing to cite</span>
+                <UsageChips answer={answer} />
+                <ListenButton answer={answer} />
+              </div>
+            </div>
+          ) : answer.refused ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-3">
               <span className="inline-flex items-center gap-2">
                 <ShieldCheck className="size-3.5 text-brand" />

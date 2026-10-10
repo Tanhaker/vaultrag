@@ -10,7 +10,7 @@ const STYLE_LABEL: Record<string, string> = {
   "en-formal": "English", "en-bhai": "English · bhai", "hinglish-bhai": "Hinglish · bhai", "hinglish-formal": "Hinglish",
   "hi-formal": "हिंदी", "hi-bhai": "हिंदी · bhai", "gu-formal": "ગુજરાતી", "gu-bhai": "ગુજરાતી · bhai",
 };
-const MODE_LABEL: Record<string, string> = { llm: "AI, grounded", extractive: "verbatim quotes", sql: "Text-to-SQL", refused: "refused" };
+const MODE_LABEL: Record<string, string> = { llm: "AI, grounded", extractive: "verbatim quotes", sql: "Text-to-SQL", refused: "refused", chat: "small talk" };
 
 function Hours({ hours }: { hours: number[] }) {
   const max = Math.max(1, ...hours);

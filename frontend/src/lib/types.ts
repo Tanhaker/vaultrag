@@ -69,7 +69,7 @@ export interface Sentence {
   removed?: boolean;
   reason?: string;
   /** How the verifier accepted it: quoted verbatim, judged entailed by the model, or figures checked. */
-  check?: "verbatim" | "entailed" | "numeric";
+  check?: "verbatim" | "entailed" | "numeric" | "chat";
   /** The verifier moved the citation to the one source that holds every figure in the sentence. */
   repaired?: { from: number[]; to: number[] };
 }
@@ -127,13 +127,15 @@ export interface Answer {
   xray: { candidates: number; visible: number; filtered: number };
   latencyMs: number;
   at: string;
-  mode?: "llm" | "extractive" | "sql" | "refused";
+  mode?: "llm" | "extractive" | "sql" | "refused" | "chat";
   rewritten?: string | null;
   dlp?: { blocked: boolean; redacted: number; canaries: string[] };
   cache?: "memory" | "postgres" | null;
   llm?: LlmUsage;
   receipt?: Receipt;
   style?: AnswerStyle;
+  /** Small talk: a conversational reply with no retrieval, plus questions to try for this role. */
+  chat?: { intent: string; nudge: string | null; suggestions: string[] };
 }
 
 export interface SourceData {

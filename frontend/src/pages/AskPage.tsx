@@ -333,6 +333,7 @@ export function AskPage() {
                         activeCite={source?.chunk.id ?? null}
                         onCite={openSource}
                         onDone={() => setBusy(false)}
+                        onAsk={submit}
                       />
                     </div>
                   </div>
