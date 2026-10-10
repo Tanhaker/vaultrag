@@ -92,6 +92,8 @@ export interface AskOptions {
   history?: { question: string }[];
   tone?: Tone;
   lang?: ReplyLang;
+  /** Ask about one attached file (retrieval limited to it, still under RLS). */
+  doc?: string;
 }
 
 /** Ask through the real pipeline when connected; the in-browser engine otherwise. */
@@ -99,7 +101,7 @@ export async function ask(question: string, s: Session, opts: AskOptions = {}): 
   if (live(s)) {
     return call<Answer>("/query", s, {
       method: "POST",
-      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [], tone: opts.tone ?? "auto", lang: opts.lang ?? "auto" }),
+      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [], tone: opts.tone ?? "auto", lang: opts.lang ?? "auto", doc: opts.doc ?? null }),
     });
   }
   return demoAsk(question, s.user);
@@ -114,7 +116,7 @@ export async function askStream(question: string, s: Session, opts: AskOptions, 
     r = await fetch(`${BASE}/query/stream`, {
       method: "POST",
       headers: { Authorization: `Bearer ${s.token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [], tone: opts.tone ?? "auto", lang: opts.lang ?? "auto" }),
+      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [], tone: opts.tone ?? "auto", lang: opts.lang ?? "auto", doc: opts.doc ?? null }),
     });
   } catch {
     return ask(question, s, opts);
@@ -172,6 +174,18 @@ export async function fetchDocuments(s: Session): Promise<{ documents: Doc[]; re
   }
   const visible = DOCS.filter((d) => aclAllows(s.user, d));
   return { documents: visible.filter((d) => d.sourceType !== "db_record"), records: [], source: "demo" };
+}
+
+/** Attach a PDF or image to the chat: it becomes a document only this user can read. */
+export async function attachFile(s: Session, file: File): Promise<IngestResult> {
+  const form = new FormData();
+  form.append("file", file);
+  return call<IngestResult>("/chat/attach", s, { method: "POST", body: form });
+}
+
+export async function detachFile(s: Session, id: string): Promise<void> {
+  const r = await fetch(`${BASE}/chat/attach/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${s.token}` } });
+  if (!r.ok && r.status !== 404) throw new ApiError(r.status, "The file could not be removed.");
 }
 
 export interface IngestResult {

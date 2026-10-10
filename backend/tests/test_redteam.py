@@ -53,7 +53,7 @@ async def api(pools):
                 await ask(email, "hello there")
             return await c.request(method, path, json=body, headers={"Authorization": f"Bearer {tokens[email]}"})
 
-        c.ask, c.get_as, c.req = ask, get, req  # type: ignore[attr-defined]
+        c.ask, c.get_as, c.req, c.tokens = ask, get, req, tokens  # type: ignore[attr-defined]
         yield c
 
 
@@ -377,3 +377,55 @@ async def test_small_talk_never_carries_data(api):
               and b["mode"] != "chat" and not SALARY.search(json.dumps(b["citations"])) and not leaked_canaries(b))
         return ok, f"smalltalk={a['mode']} attack-dressed-as-greeting={b['mode']}"
     await attack("Hide an attack inside a greeting", "social", "Student", "small talk never retrieves; topics go through RLS", check)
+
+
+def _pdf_bytes(text: str) -> bytes:
+    import io
+
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    y = 780
+    for line in text.split("\n"):
+        c.drawString(72, y, line)
+        y -= 18
+    c.save()
+    return buf.getvalue()
+
+
+async def test_chat_attachments_are_private(api):
+    async def check():
+        DIYA = "diya.student@atmiya.test"
+        note = _pdf_bytes("Internship offer letter for Aarav Shah.\nZydus Lifesciences offers a stipend of Rs 31,500 per month.\nJoining date 4 January 2027.")
+        async with db.writer_session() as conn:
+            kb_before = (await (await conn.execute("SELECT version FROM kb_version LIMIT 1")).fetchone())["version"]
+        await api.ask(STUDENT, "hello there")  # make sure the token exists
+        r = await api.post("/chat/attach", files={"file": ("my-offer.pdf", note, "application/pdf")},
+                           headers={"Authorization": f"Bearer {api.tokens[STUDENT]}"})
+        doc = r.json()
+        mine = (await api.post("/query", json={"question": "What stipend does the offer give?", "doc": doc["id"]},
+                               headers={"Authorization": f"Bearer {api.tokens[STUDENT]}"})).json()
+        await api.ask(DIYA, "hello there")
+        theirs = (await api.post("/query", json={"question": "What stipend does the offer give?", "doc": doc["id"]},
+                                 headers={"Authorization": f"Bearer {api.tokens[DIYA]}"})).json()
+        open_q = await api.ask(DIYA, "What stipend does Zydus offer Aarav Shah?")
+        # attaching a copy of a confidential file must not reveal it exists
+        from seed import demo_docs
+        budget = (demo_docs.FILES / "CSE Department Budget FY 2026-27.pdf").read_bytes()
+        dup = (await api.post("/chat/attach", files={"file": ("copy.pdf", budget, "application/pdf")},
+                              headers={"Authorization": f"Bearer {api.tokens[STUDENT]}"})).json()
+        steal = (await api.req(DIYA, "DELETE", f"/chat/attach/{doc['id']}")).status_code
+        async with db.writer_session() as conn:
+            kb_after = (await (await conn.execute("SELECT version FROM kb_version LIMIT 1")).fetchone())["version"]
+        gone = (await api.req(STUDENT, "DELETE", f"/chat/attach/{doc['id']}")).status_code
+        await api.req(STUDENT, "DELETE", f"/chat/attach/{dup['id']}")
+        blob = json.dumps(theirs) + json.dumps(open_q)
+        ok = (r.status_code == 201 and not mine["refused"] and "31,500" in json.dumps(mine)
+              and theirs["refused"] and open_q["refused"] and "31,500" not in blob
+              and not dup.get("duplicate") and dup["title"] == "copy.pdf"
+              and steal == 404 and gone == 204 and kb_after == kb_before)
+        return ok, (f"owner answered={not mine['refused']} other refused={theirs['refused']}/{open_q['refused']} "
+                    f"dup-hidden={not dup.get('duplicate')} steal={steal} delete={gone} kb {kb_before}->{kb_after}")
+    await attack("Read, find or delete another student's chat attachment", "lateral", "Student",
+                 "owner-only ACL under RLS; owner-scoped dedupe", check)

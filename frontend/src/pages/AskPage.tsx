@@ -1,11 +1,11 @@
-import { ArrowUp, CircleCheck, HandHeart, Languages, Loader2, MessageSquarePlus, Mic, Quote, ShieldCheck, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
+import { ArrowUp, CircleCheck, FileText, HandHeart, ImageIcon, Languages, Loader2, Lock, MessageSquarePlus, Mic, Paperclip, Quote, ShieldCheck, SlidersHorizontal, Square, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnswerCard } from "../components/AnswerCard";
 import { Mark } from "../components/Layout";
 import { SourceViewer } from "../components/SourceViewer";
 import { Avatar, ClassBadge, cx } from "../components/ui";
-import { ApiError, askStream, fetchXray, type ReplyLang, type Tone, type Xray } from "../lib/api";
+import { ApiError, askStream, attachFile, detachFile, fetchXray, isLive, type ReplyLang, type Tone, type Xray } from "../lib/api";
 import { SUGGESTED_QUESTIONS } from "../lib/corpus";
 import { ask as demoAsk, recordAudit } from "../lib/engine";
 import { roleLabel } from "../lib/personas";
@@ -164,6 +164,42 @@ export function AskPage() {
   const [tone, setTone] = useState<Tone>(() => loadPref<Tone>(TONE_KEY, "auto", TONES.map((t) => t[0])));
   const [lang, setLang] = useState<ReplyLang>(() => loadPref<ReplyLang>(LANG_KEY, "auto", REPLY_LANGS.map((l) => l[0])));
   const [showOpts, setShowOpts] = useState(false);
+  const [attached, setAttached] = useState<{ id: string; title: string; chunks: number; image: boolean } | null>(null);
+  const [focusFile, setFocusFile] = useState(true);
+  const [attaching, setAttaching] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function onAttach(f: File | undefined) {
+    if (!f || !session) return;
+    if (!isLive(session)) {
+      setError("Attaching files needs the live backend.");
+      return;
+    }
+    setError(null);
+    setAttaching(f.name);
+    try {
+      const r = await attachFile(session, f);
+      setAttached({ id: r.id, title: r.title, chunks: r.chunks, image: /\.(png|jpe?g|webp)$/i.test(r.title) });
+      setFocusFile(true);
+      setInput("");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "The file could not be read. Try a PDF or a clear photo.");
+    } finally {
+      setAttaching(null);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function onDetach() {
+    if (!attached || !session) return;
+    const id = attached.id;
+    setAttached(null);
+    try {
+      await detachFile(session, id);
+    } catch {
+      /* already gone */
+    }
+  }
   const voice = useVoice(lang, setInput);
   const [params, setParams] = useSearchParams();
   const asked = useRef(false);
@@ -219,7 +255,7 @@ export function AskPage() {
     setPending({ question, steps: [] });
     let a: Answer;
     try {
-      a = await askStream(question, session!, { verbatim, history, tone, lang }, (step) =>
+      a = await askStream(question, session!, { verbatim, history, tone, lang, doc: attached && focusFile ? attached.id : undefined }, (step) =>
         setPending((p) => (p ? { ...p, steps: [...p.steps, step] } : p)),
       );
       if (session!.mode === "live") streamedIds.add(a.id);
@@ -387,7 +423,40 @@ export function AskPage() {
               <span className="truncate text-ink-3">Follow-ups use the previous question as context</span>
             )}
           </div>
+          {(attached || attaching) && (
+            <div className="fade-up mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2 text-[12.5px]">
+              <span className="inline-flex min-w-0 items-center gap-2 rounded-xl bg-panel px-3 py-1.5 ring-1 ring-line-2">
+                {attaching ? <Loader2 className="size-4 animate-spin text-brand" /> : attached!.image ? <ImageIcon className="size-4 text-brand" /> : <FileText className="size-4 text-brand" />}
+                <span className="max-w-[16rem] truncate font-medium text-ink">{attaching ?? attached!.title}</span>
+                <span className="text-ink-3">{attaching ? "reading, OCR and indexing…" : `${attached!.chunks} chunks`}</span>
+                {!attaching && <span className="inline-flex items-center gap-1 rounded-md bg-brand-soft px-1.5 py-0.5 text-[11px] text-brand"><Lock className="size-3" /> only you</span>}
+                {!attaching && (
+                  <button type="button" onClick={onDetach} aria-label="Remove the file" title="Remove the file (deletes it from the database)"
+                          className="rounded p-0.5 text-ink-3 hover:bg-panel-2 hover:text-ink"><X className="size-3.5" /></button>
+                )}
+              </span>
+              {attached && !attaching && (
+                <>
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-ink-2">
+                    <input type="checkbox" checked={focusFile} onChange={(e) => setFocusFile(e.target.checked)} className="accent-[var(--color-brand)]" />
+                    Ask about this file only
+                  </label>
+                  {focusFile && (
+                    <button type="button" onClick={() => submit(attached.image ? "What does this image say?" : "Summarise this document.")}
+                            className="rounded-full bg-ink px-3 py-1 text-paper hover:bg-brand">Summarise it</button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-[18px] bg-paper p-2 shadow-card ring-1 ring-line-2 transition-shadow focus-within:ring-2 focus-within:ring-brand">
+            <input ref={fileRef} id="chat-attach" type="file" accept=".pdf,image/png,image/jpeg,image/webp" className="hidden"
+                   onChange={(e) => onAttach(e.target.files?.[0])} />
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={!!attaching}
+                    aria-label="Attach a PDF or image" title="Attach a PDF or image. Only you will be able to read it."
+                    className="grid size-9 shrink-0 place-items-center rounded-[12px] text-ink-3 transition-colors hover:bg-panel-2 hover:text-ink disabled:opacity-50">
+              <Paperclip className="size-4" />
+            </button>
             <button
               type="button"
               onClick={() => setShowOpts((v) => !v)}
@@ -409,7 +478,7 @@ export function AskPage() {
                   submit(input);
                 }
               }}
-              placeholder={voice.listening ? "Listening…" : "Ask anything: fees, exams, policies…"}
+              placeholder={voice.listening ? "Listening…" : attached && focusFile ? `Ask about ${attached.title}…` : "Ask anything: fees, exams, policies…"}
               className="max-h-40 min-h-[40px] min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-[14.5px] placeholder:truncate outline-none placeholder:text-ink-3"
             />
             {voice.supported && (

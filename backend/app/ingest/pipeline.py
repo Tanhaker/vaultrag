@@ -52,7 +52,7 @@ async def _insert_chunks(conn, doc_id: UUID, chunks: list[Block], vectors: list[
 
 async def ingest_file(*, tenant: UUID, filename: str, data: bytes, mime: str, classification: int,
                       department: str | None, allowed_roles: list[str], allowed_users: list[UUID] | None = None,
-                      owner_id: UUID | None = None, title: str | None = None) -> dict:
+                      owner_id: UUID | None = None, title: str | None = None, dedupe_scope: str | None = None) -> dict:
     steps: list[dict] = []
     t0 = time.perf_counter()
 
@@ -62,7 +62,9 @@ async def ingest_file(*, tenant: UUID, filename: str, data: bytes, mime: str, cl
         t0 = time.perf_counter()
 
     source_type = _source_type(filename, mime)
-    sha = hashlib.sha256(data).hexdigest()
+    # A scope (e.g. one user's private uploads) keeps the duplicate check inside it, so a match can
+    # never reveal a document the uploader cannot read.
+    sha = hashlib.sha256((f"{dedupe_scope}:".encode() if dedupe_scope else b"") + data).hexdigest()
     title = title or filename
     async with writer_session() as conn:
         dup = await (await conn.execute(

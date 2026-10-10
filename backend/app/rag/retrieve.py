@@ -54,28 +54,34 @@ def coverage(qterms: list[str], text: str) -> float:
     return hit / len(qt)
 
 
-async def _ranked(conn: AsyncConnection, question: str, qvec: list[float] | None) -> tuple[dict, dict]:
+async def _ranked(conn: AsyncConnection, question: str, qvec: list[float] | None, doc=None) -> tuple[dict, dict]:
     vec: dict[str, tuple[int, float]] = {}
     if qvec is not None:
         lit = literal(qvec)
         rows = await (await conn.execute(
             "SELECT id, 1 - (embedding <=> %s::vector) AS sim FROM chunks"
-            " WHERE embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT %s",
-            (lit, lit, VEC_K))).fetchall()
+            " WHERE embedding IS NOT NULL AND (%s::uuid IS NULL OR document_id = %s::uuid)"
+            " ORDER BY embedding <=> %s::vector LIMIT %s",
+            (lit, doc, doc, lit, VEC_K))).fetchall()
         vec = {str(r["id"]): (i, float(r["sim"])) for i, r in enumerate(rows)}
     lex: dict[str, tuple[int, float]] = {}
     qt = terms(question)
     if qt:
         rows = await (await conn.execute(
             "SELECT c.id, ts_rank_cd(c.content_tsv, q, 32) AS lex FROM chunks c, to_tsquery('english', %s) q"
-            " WHERE c.content_tsv @@ q ORDER BY lex DESC LIMIT %s",
-            (" | ".join(qt), LEX_K))).fetchall()
+            " WHERE c.content_tsv @@ q AND (%s::uuid IS NULL OR c.document_id = %s::uuid) ORDER BY lex DESC LIMIT %s",
+            (" | ".join(qt), doc, doc, LEX_K))).fetchall()
         lex = {str(r["id"]): (i, float(r["lex"])) for i, r in enumerate(rows)}
     return vec, lex
 
 
-async def hybrid(conn: AsyncConnection, question: str, qvec: list[float] | None, top: int = 12) -> dict:
-    vec, lex = await _ranked(conn, question, qvec)
+async def hybrid(conn: AsyncConnection, question: str, qvec: list[float] | None, top: int = 12, doc=None) -> dict:
+    """doc: limit retrieval to one document (a chat attachment). RLS applies either way."""
+    vec, lex = await _ranked(conn, question, qvec, doc)
+    if doc and not vec and not lex:  # "summarise this": no matching terms, so take the file's chunks in order
+        rows = await (await conn.execute("SELECT id FROM chunks WHERE document_id = %s ORDER BY ord LIMIT %s",
+                                         (doc, top))).fetchall()
+        lex = {str(r["id"]): (i, 0.0) for i, r in enumerate(rows)}
     rrf: dict[str, float] = {}
     for ranks in (vec, lex):
         for cid, (rank, _) in ranks.items():

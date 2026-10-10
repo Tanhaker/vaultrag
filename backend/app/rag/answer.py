@@ -423,7 +423,8 @@ async def _small_talk(user: UserCtx, question: str, kind: str, st, pf, key: str,
 # --- main entry ------------------------------------------------------------------------------
 
 async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: list[dict] | None = None,
-              on_step: StepSink = None, use_cache: bool = True, tone: str = "auto", lang: str = "auto") -> dict:
+              on_step: StepSink = None, use_cache: bool = True, tone: str = "auto", lang: str = "auto",
+              doc: str | None = None) -> dict:
     s = get_settings()
     question = question.strip()[:500]
     asked = stylemod.normalize(question)          # "exammm kabb haiii????" -> "exam kabb hai?"
@@ -433,13 +434,13 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
     st = stylemod.resolve(asked, tone, lang)
     unclaimed, claim = guard.strip_identity_claims(effective)
     search = stylemod.search_text(unclaimed or effective)   # regional words -> English search terms
-    key = guard.cache_key(effective, verbatim, st.key)
+    key = guard.cache_key(effective, verbatim, st.key + (f"|doc:{doc}" if doc else ""))
     usage = gemini.begin_usage()
 
     pf = await guard.preflight(user, key)
     guard.enforce_rate_limit(pf)
 
-    kind = chatmod.intent(asked)
+    kind = None if doc else chatmod.intent(asked)
     if kind:
         return await _small_talk(user, question, kind, st, pf, key, on_step)
 
@@ -473,7 +474,7 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
     sentences: list[dict] = []
     handled = False
 
-    if sqlmod.is_structured(search):
+    if not doc and sqlmod.is_structured(search):
         res = await _sql_answer(user, search, timer, allow_llm)
         if res:
             sentences, citation, meta = res
@@ -487,7 +488,7 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
                    (f"{embeddings.provider()} · {s.embedding_dim}-d" + (" · cached vector, 0 quota" if vec_cached else ""))
                    if qvec else "embedding unavailable → lexical only")
         async with secure_session(user) as conn:
-            h = await hybrid(conn, search, qvec)
+            h = await hybrid(conn, search, qvec, doc=doc)
         timer.step("search", "Hybrid search under RLS",
                    f"HNSW {h['vector']} + BM25 {h['lexical']} authorised · iterative scan")
 
@@ -495,9 +496,11 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
         cands = h["candidates"]
         quarantined_rows = [c for c in cands[:8] if c["injection"] and c["features"]["coverage"] >= 0.25]
         semantic = qvec is not None and embeddings.provider() == "gemini"
-        asked = mentioned_departments(effective)
+        depts_asked = mentioned_departments(effective)
         usable = [c for c in cands if not c["injection"] and relevant(c, qn, semantic)
-                  and not (asked and c["department"] and c["department"] not in asked)][:6]
+                  and not (depts_asked and c["department"] and c["department"] not in depts_asked)][:6]
+        if doc and not usable:  # the user pointed at their own file: its chunks are the context
+            usable = [c for c in cands if not c["injection"]][:6]
         timer.step("rerank", "RRF fusion + rerank", f"{len(usable)} kept of {len(cands)} fused")
         timer.step("guard", "Injection scan",
                    f"{len(quarantined_rows)} chunk quarantined (prompt-injection pattern)" if quarantined_rows else "no injection patterns")
@@ -507,7 +510,7 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
         def compose_without_llm() -> tuple[list[dict], list[dict], list[dict]]:
             # No model to judge the sources, so only chunks that clearly answer the question are quoted.
             subject = subject_terms(search)
-            strict = [c for c in usable if answerable(c, semantic) and on_subject(c, subject)]
+            strict = usable if doc else [c for c in usable if answerable(c, semantic) and on_subject(c, subject)]
             return strict, [{"n": i + 1, "title": c["title"], "text": c["content"]} for i, c in enumerate(strict)], \
                 (extractive(search, strict) if strict else [])
 
