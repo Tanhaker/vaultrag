@@ -43,19 +43,20 @@ function useTheme(): [boolean, () => void] {
   return [dark, toggle];
 }
 
-/** The DefRAG mark: a D assembled from fragments, on a white tile so it reads on light and dark. */
-export function Glyph({ className }: { className?: string }) {
+/** The DefRAG mark: a D assembled from fragments, on a transparent background. On dark surfaces
+ *  (the story hero, dark theme) the D's ink end turns light so it keeps its contrast. */
+export function Glyph({ className, light }: { className?: string; light?: boolean }) {
   const id = useId().replace(/:/g, "");
   return (
-    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+    <svg viewBox="11 9 46 46" className={className} aria-hidden>
       <defs>
-        <linearGradient id={`d${id}`} x1="0.15" y1="0.1" x2="0.95" y2="0.95"><stop offset="0.55" stopColor="#0f1b2b" /><stop offset="1" stopColor="#16a37f" /></linearGradient>
+        <linearGradient id={`d${id}`} x1="0.15" y1="0.1" x2="0.95" y2="0.95"><stop offset="0.55" stopColor={light ? "#e9f3ee" : "var(--logo-ink, #0f1b2b)"} /><stop offset="1" stopColor="#16a37f" /></linearGradient>
         <linearGradient id={`g${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#4cc46e" /><stop offset="1" stopColor="#139a7f" /></linearGradient>
         <linearGradient id={`t${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#14a085" /><stop offset="1" stopColor="#0f3b4a" /></linearGradient>
       </defs>
       <path d="M24.5 13.5h12.5a17.5 17.5 0 0 1 0 37h-9.6v-7.2h9.6a10.3 10.3 0 0 0 0-20.6h-7.3z" fill={`url(#d${id})`} />
       <rect x="27.6" y="23.6" width="9.4" height="8.4" rx="1.4" fill={`url(#t${id})`} />
-      <rect x="34.2" y="29.2" width="5.6" height="5.6" rx="1.2" fill="#0f3b4a" />
+      <rect x="34.2" y="29.2" width="5.6" height="5.6" rx="1.2" fill={light ? "#7fd1b4" : "var(--logo-step, #0f3b4a)"} />
       <rect x="20" y="18.6" width="6.6" height="6.6" rx="1.4" fill={`url(#g${id})`} />
       <rect x="13.6" y="23.4" width="3.8" height="3.8" rx="0.9" fill="#4cc46e" />
       <rect x="17.4" y="27.6" width="4" height="4" rx="0.9" fill={`url(#g${id})`} />
@@ -64,12 +65,8 @@ export function Glyph({ className }: { className?: string }) {
   );
 }
 
-export function Mark({ className = "size-7" }: { className?: string }) {
-  return (
-    <span className={cx("inline-grid shrink-0 place-items-center overflow-hidden rounded-[24%] bg-white ring-1 ring-black/5", className)}>
-      <Glyph className="size-full" />
-    </span>
-  );
+export function Mark({ className = "size-7", light }: { className?: string; light?: boolean }) {
+  return <Glyph className={cx("shrink-0", className)} light={light} />;
 }
 
 /** Wordmark: "Def" in ink, "RAG" in the mark's green. */

@@ -56,8 +56,8 @@ export function HeroArt({ progress }: { progress: number }) {
       </svg>
 
       {/* the mark */}
-      <div className="absolute top-1/2 left-1/2 grid size-[19%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-[26%] bg-paper shadow-[0_20px_60px_-10px_rgba(36,84,63,0.7)]">
-        <Glyph className="size-[96%]" />
+      <div className="absolute top-1/2 left-1/2 grid size-[22%] -translate-x-1/2 -translate-y-1/2 place-items-center drop-shadow-[0_10px_30px_rgba(63,138,102,0.55)]">
+        <Glyph className="size-full" light />
       </div>
 
       {/* orbiting sources */}

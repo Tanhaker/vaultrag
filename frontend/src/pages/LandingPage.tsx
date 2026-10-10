@@ -86,7 +86,7 @@ function TopBar() {
                           scrolled && (dark ? "bg-ink/40 backdrop-blur-md" : "bg-bg/85 shadow-[0_1px_0_var(--color-line)] backdrop-blur-md"))}>
       <div className="mx-auto flex max-w-[1320px] items-center gap-6 px-5 py-3.5 sm:px-8">
         <Link to="/" className="flex items-center gap-2.5" aria-label="DefRAG home">
-          <Mark className="size-7" />
+          <Mark className="size-8" light={dark} />
           <Wordmark light={dark} />
         </Link>
         <nav className={cx("ml-4 hidden gap-5 text-[13px] lg:flex", dark ? "text-paper/65" : "text-ink-3")}>
