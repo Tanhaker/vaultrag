@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Tanhaker/vaultrag/actions/workflows/ci.yml/badge.svg)](https://github.com/Tanhaker/vaultrag/actions/workflows/ci.yml)
 
-Code Carnival 2026, Atmiya University · PS-01 · Team **FriendlyFire** (TXJ8): Bhakti Kareliya (team leader), Tanmay Gajjar.
+Code Carnival 2026, Atmiya University · PS-01 · Team **LemonRice** (TXJ8): Bhakti Kareliya (team leader), Tanmay Gajjar.
 
 **Live demo:** https://vaultrag-nine.vercel.app (fictional data; demo accounts below)
 

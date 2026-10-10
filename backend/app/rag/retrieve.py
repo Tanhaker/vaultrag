@@ -129,3 +129,29 @@ def answerable(c: dict, semantic: bool) -> bool:
     return (f["sim"] >= 0.78
             or (f["coverage"] >= 0.5 and f["sim"] >= 0.60)
             or (f["coverage"] >= 0.4 and f["sim"] >= 0.66))
+
+
+# Words that locate a question (a department, a year, a generic noun) without saying what it asks.
+_SCOPE = {"cse", "mech", "civil", "ec", "computer", "science", "mechanical", "electronics", "engineering", "department",
+          "dept", "university", "atmiya", "year", "this", "current", "college", "student", "students", "faculty",
+          "list", "show", "tell", "give", "every", "all", "much", "many", "total"}
+_YEARISH = re.compile(r"^\d{2,4}(?:-\d{2,4})?$")
+
+
+def subject_terms(question: str) -> set[str]:
+    """The terms that say what is being asked ("budget" in "CSE department budget 2026-27")."""
+    return {t for t in terms(question) if t not in _SCOPE and not _YEARISH.match(t)}
+
+
+def on_subject(c: dict, subject: set[str]) -> bool:
+    """A quoted source must mention at least one subject term; matching only the department or the
+    year ("CSE ... 2026") is not an answer. Prefix match tolerates plurals ("fee" / "fees")."""
+    if not subject:
+        return True
+    words = set(_TOKEN.findall(c["content"].lower()))
+
+    def same_stem(a: str, b: str) -> bool:
+        k = min(5, len(a), len(b))
+        return k >= 3 and a[:k] == b[:k]
+
+    return any(same_stem(s, w) for s in subject for w in words)

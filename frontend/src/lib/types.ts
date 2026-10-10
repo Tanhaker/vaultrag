@@ -70,6 +70,8 @@ export interface Sentence {
   reason?: string;
   /** How the verifier accepted it: quoted verbatim, judged entailed by the model, or figures checked. */
   check?: "verbatim" | "entailed" | "numeric";
+  /** The verifier moved the citation to the one source that holds every figure in the sentence. */
+  repaired?: { from: number[]; to: number[] };
 }
 
 export interface Receipt {

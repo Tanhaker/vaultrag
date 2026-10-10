@@ -196,3 +196,17 @@ def test_identity_claims_are_stripped_from_search():
     assert guard.strip_identity_claims("Main confused hoon, fees kitni hai?")[1] is None
     assert guard.strip_identity_claims("मैं परेशान हूँ, फीस बताओ")[1] is None
     assert guard.strip_identity_claims("What is the minimum attendance?") == ("What is the minimum attendance?", None)
+
+
+async def test_citation_repair_moves_a_figure_to_its_source():
+    src = {1: "Placement Report 2025-26 for faculty.", 2: "CSE | 118 | 109 | 92% | 6.8"}
+    out, _ = await verify([{"text": "CSE placed 92% of students.", "cites": [1]}], src, use_llm=False)
+    assert not out[0].get("removed") and out[0]["cites"] == [2] and out[0]["repaired"] == {"from": [1], "to": [2]}
+    out, _ = await verify([{"text": "CSE placed 97% of students.", "cites": [1]}], src, use_llm=False)
+    assert out[0]["removed"]
+
+
+async def test_citation_repair_can_span_two_chunks_of_a_document():
+    src = {1: "Placement Report 2025-26 for faculty.", 2: "CSE | 118 | 109 | 92% | 6.8", 3: "Fee notice CSE 1,35,000"}
+    out, _ = await verify([{"text": "In 2025-26 CSE placed 92%.", "cites": [2]}], src, use_llm=False)
+    assert not out[0].get("removed") and out[0]["cites"] == [1, 2]

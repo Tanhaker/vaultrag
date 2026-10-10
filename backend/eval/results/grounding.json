@@ -1,18 +1,18 @@
 {
-  "at": "2026-10-09T14:47:07+00:00",
+  "at": "2026-10-10T09:23:27+00:00",
   "mode": "verbatim",
   "summary": {
     "cases": 32,
     "decision_accuracy": 1.0,
     "answered_when_expected": "20/20",
     "refused_when_expected": "12/12",
-    "citation_precision": 1.0,
+    "citation_precision": 0.983,
     "fact_recall": 0.95,
     "hit_at_5": 1.0,
     "groundedness": 1.0,
-    "verbatim_sentences": 0.805,
-    "p50_ms": 612,
-    "p95_ms": 967
+    "verbatim_sentences": 0.773,
+    "p50_ms": 15,
+    "p95_ms": 22
   },
   "rows": [
     {
@@ -21,7 +21,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 711,
+      "latencyMs": 25,
       "groundedness": 1.0,
       "cited": [
         "Academic Handbook 2026-27.pdf"
@@ -41,7 +41,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 630,
+      "latencyMs": 16,
       "groundedness": 1.0,
       "cited": [
         "Notice Board - Robotics Workshop.jpg",
@@ -63,18 +63,20 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 945,
+      "latencyMs": 22,
       "groundedness": 1.0,
       "cited": [
         "Fee Structure Notice 2026-27.jpg",
-        "Fee Structure Notice 2026-27.jpg"
+        "Fee Structure Notice 2026-27.jpg",
+        "Academic Calendar 2026-27.pdf"
       ],
       "checks": [
         "verbatim",
-        "verbatim"
+        "verbatim",
+        "numeric"
       ],
       "decision_ok": true,
-      "citation_precision": 1.0,
+      "citation_precision": 0.6666666666666666,
       "fact_ok": true,
       "hit_at_5": true
     },
@@ -84,7 +86,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 943,
+      "latencyMs": 14,
       "groundedness": 1.0,
       "cited": [
         "fee_payments · AU23CSE001"
@@ -103,7 +105,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 587,
+      "latencyMs": 16,
       "groundedness": 1.0,
       "cited": [
         "Academic Handbook 2026-27.pdf"
@@ -123,7 +125,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 716,
+      "latencyMs": 14,
       "groundedness": 1.0,
       "cited": [
         "Academic Handbook 2026-27.pdf"
@@ -142,14 +144,16 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 932,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [
-        "Academic Handbook 2026-27.pdf"
+        "Academic Handbook 2026-27.pdf",
+        "Academic Calendar 2026-27.pdf"
       ],
       "checks": [
         "verbatim",
-        "verbatim"
+        "verbatim",
+        "numeric"
       ],
       "decision_ok": true,
       "citation_precision": 1.0,
@@ -162,7 +166,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 597,
+      "latencyMs": 14,
       "groundedness": 1.0,
       "cited": [
         "Academic Handbook 2026-27.pdf"
@@ -182,7 +186,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 598,
+      "latencyMs": 16,
       "groundedness": 1.0,
       "cited": [
         "Academic Handbook 2026-27.pdf"
@@ -202,7 +206,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 612,
+      "latencyMs": 18,
       "groundedness": 1.0,
       "cited": [
         "CSE Department Budget FY 2026-27.pdf"
@@ -222,7 +226,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 1078,
+      "latencyMs": 18,
       "groundedness": 1.0,
       "cited": [
         "CSE Department Budget FY 2026-27.pdf",
@@ -243,7 +247,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 927,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [
         "MECH Department Budget FY 2026-27.pdf"
@@ -263,12 +267,14 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 576,
+      "latencyMs": 18,
       "groundedness": 1.0,
       "cited": [
-        "CSE Department Budget FY 2026-27.pdf"
+        "CSE Department Budget FY 2026-27.pdf",
+        "Finance Committee Minutes - April 2026.pdf"
       ],
       "checks": [
+        "verbatim",
         "verbatim",
         "verbatim"
       ],
@@ -283,7 +289,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 589,
+      "latencyMs": 16,
       "groundedness": 1.0,
       "cited": [
         "Faculty Appraisal Summary 2025-26 (scanned).pdf"
@@ -303,7 +309,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 579,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [
         "Faculty Appraisal Summary 2025-26 (scanned).pdf"
@@ -322,7 +328,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 922,
+      "latencyMs": 14,
       "groundedness": 1.0,
       "cited": [
         "Examination & Moderation Policy.pdf"
@@ -342,7 +348,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 577,
+      "latencyMs": 14,
       "groundedness": 1.0,
       "cited": [
         "Examination & Moderation Policy.pdf"
@@ -361,7 +367,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "extractive",
-      "latencyMs": 873,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [
         "Academic Handbook 2026-27.pdf"
@@ -381,7 +387,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "sql",
-      "latencyMs": 15,
+      "latencyMs": 14,
       "groundedness": 1.0,
       "cited": [
         "Live query · fee_payments, students"
@@ -402,7 +408,7 @@
       "expect": "answer",
       "refused": false,
       "mode": "sql",
-      "latencyMs": 6,
+      "latencyMs": 4,
       "groundedness": 1.0,
       "cited": [
         "Live query · students"
@@ -423,7 +429,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 593,
+      "latencyMs": 16,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -435,7 +441,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 592,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -447,7 +453,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 587,
+      "latencyMs": 14,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -459,7 +465,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 949,
+      "latencyMs": 18,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -471,7 +477,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 571,
+      "latencyMs": 16,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -483,7 +489,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 899,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -495,7 +501,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 593,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -507,7 +513,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 585,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -519,7 +525,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 917,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -531,7 +537,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 908,
+      "latencyMs": 13,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -543,7 +549,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 599,
+      "latencyMs": 14,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],
@@ -555,7 +561,7 @@
       "expect": "refuse",
       "refused": true,
       "mode": "refused",
-      "latencyMs": 967,
+      "latencyMs": 15,
       "groundedness": 1.0,
       "cited": [],
       "checks": [],

@@ -8,6 +8,7 @@ import { Avatar, ClassBadge, cx } from "./ui";
 
 const NAV: { to: string; label: string; role?: string }[] = [
   { to: "/", label: "Story" },
+  { to: "/demo", label: "Demo guide" },
   { to: "/me", label: "Dashboard", role: "student" },
   { to: "/ask", label: "Ask" },
   { to: "/compare", label: "Compare" },

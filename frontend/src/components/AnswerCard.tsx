@@ -256,7 +256,7 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
             const complete = budget >= s.text.length;
             budget -= s.text.length + 1;
             return (
-              <span key={i} className={cx(!complete && "caret")} title={complete && s.check ? CHECK_LABEL[s.check] : undefined}>
+              <span key={i} className={cx(!complete && "caret")} title={complete && s.check ? CHECK_LABEL[s.check] + (s.repaired ? " · citation corrected by the verifier to the source holding these figures" : "") : undefined}>
                 {shown}
                 {complete &&
                   s.cites.map((n) => (

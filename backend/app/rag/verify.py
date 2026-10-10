@@ -36,6 +36,24 @@ def verbatim(claim: str, sources: list[str]) -> bool:
     return len(c) >= 12 and any(c in _flat(s) for s in sources)
 
 
+def _figure_sources(claim: str, cites: list[int], source_text: dict[int, str]) -> list[int] | None:
+    """The fewest supplied sources (at most two, keeping the model's own citation when it helps) that
+    together contain every figure in the claim; None when no such set exists or it is ambiguous."""
+    need = numbers(claim)
+    if not need:
+        return None
+    have = {n: numbers(t) for n, t in source_text.items()}
+    singles = [n for n in have if need <= have[n]]
+    if len(singles) == 1:
+        return singles
+    if singles:
+        return None  # several sources hold every figure: no basis to pick one
+    pairs = [sorted({a, b}) for a in have for b in have if a < b and need <= have[a] | have[b]]
+    own = [p for p in pairs if set(p) & set(cites)]
+    pick = own if own else pairs
+    return pick[0] if len(pick) == 1 else None
+
+
 async def verify(sentences: list[dict], source_text: dict[int, str], *, use_llm: bool = True) -> tuple[list[dict], str]:
     """sentences: [{text, cites}] -> same list with removed/reason/check set; returns (sentences, method)."""
     for s in sentences:
@@ -44,7 +62,17 @@ async def verify(sentences: list[dict], source_text: dict[int, str], *, use_llm:
         if not s["cites"]:
             s["removed"], s["reason"] = True, "No valid citation"
         elif not numeric_ok(s["text"], cited):
-            s["removed"], s["reason"] = True, "Figure not found in the cited source"
+            # Citation repair: the model cited the wrong chunk of a document. When exactly one supplied
+            # source holds every figure in the sentence, cite that one (shown to the user) instead of dropping it.
+            holders = _figure_sources(s["text"], s["cites"], source_text)
+            if holders:
+                s["repaired"] = {"from": s["cites"], "to": holders}
+                s["cites"] = holders
+                cited = [source_text[n] for n in holders]
+                if verbatim(s["text"], cited):
+                    s["check"] = "verbatim"
+            else:
+                s["removed"], s["reason"] = True, "Figure not found in the cited source"
         elif verbatim(s["text"], cited):
             s["check"] = "verbatim"
 

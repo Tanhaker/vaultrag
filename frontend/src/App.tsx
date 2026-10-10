@@ -41,6 +41,7 @@ const AskPage = lazy(() => load(() => import("./pages/AskPage")).then((m) => ({ 
 const ComparePage = lazy(() => load(() => import("./pages/ComparePage")).then((m) => ({ default: m.ComparePage })));
 const KnowledgePage = lazy(() => load(() => import("./pages/KnowledgePage")).then((m) => ({ default: m.KnowledgePage })));
 const RecordsPage = lazy(() => load(() => import("./pages/RecordsPage")).then((m) => ({ default: m.RecordsPage })));
+const DemoPage = lazy(() => load(() => import("./pages/DemoPage")).then((m) => ({ default: m.DemoPage })));
 const MePage = lazy(() => load(() => import("./pages/MePage")).then((m) => ({ default: m.MePage })));
 const InsightsPage = lazy(() => load(() => import("./pages/InsightsPage")).then((m) => ({ default: m.InsightsPage })));
 const SecurityPage = lazy(() => load(() => import("./pages/SecurityPage")).then((m) => ({ default: m.SecurityPage })));
@@ -62,6 +63,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/demo" element={<DemoPage />} />
             <Route
               element={
                 <RequireAuth>

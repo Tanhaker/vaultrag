@@ -26,7 +26,7 @@ from ..models import UserCtx
 from . import guard, receipts
 from . import sql as sqlmod
 from . import style as stylemod
-from .retrieve import answerable, coverage, hybrid, relevant, terms
+from .retrieve import answerable, coverage, hybrid, on_subject, relevant, subject_terms, terms
 from .verify import verify
 
 REFUSAL = llm.REFUSAL
@@ -457,7 +457,8 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
 
         def compose_without_llm() -> tuple[list[dict], list[dict], list[dict]]:
             # No model to judge the sources, so only chunks that clearly answer the question are quoted.
-            strict = [c for c in usable if answerable(c, semantic)]
+            subject = subject_terms(search)
+            strict = [c for c in usable if answerable(c, semantic) and on_subject(c, subject)]
             return strict, [{"n": i + 1, "title": c["title"], "text": c["content"]} for i, c in enumerate(strict)], \
                 (extractive(search, strict) if strict else [])
 
@@ -484,7 +485,8 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
             timer.step("gen", "Generate with citations", "insufficient evidence → refuse")
 
         if sentences:
-            sentences, method = await verify(sentences, {x["n"]: x["text"] for x in sources}, use_llm=allow_llm)
+            # The title is part of what the model was shown with each source, so figures in it count.
+            sentences, method = await verify(sentences, {x["n"]: f"{x['title']}\n{x['text']}" for x in sources}, use_llm=allow_llm)
             kept = len([x for x in sentences if not x.get("removed")])
             timer.step("verify", "Citation verifier", f"{method} · {kept} supported · {len(sentences) - kept} removed")
         else:

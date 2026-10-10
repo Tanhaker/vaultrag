@@ -51,13 +51,15 @@ async def main(use_llm: bool) -> None:
                  "checks": [s.get("check") for s in kept if not a["refused"]],
                  "decision_ok": (c["expect"] == "refuse") == a["refused"]}
             if c["expect"] == "answer":
-                r["citation_precision"] = (sum(c["doc"].lower() in t.lower() for t in cited) / len(cited)) if cited else 0.0
+                docs = [x.lower() for x in (c["doc"] if isinstance(c["doc"], list) else [c["doc"]])]
+                r["citation_precision"] = (sum(any(x in t.lower() for x in docs) for t in cited) / len(cited)) if cited else 0.0
                 r["fact_ok"] = all(_norm(f) in _norm(text) for f in c["fact"])
-                if c["doc"] != "Live query":
+                primary = c["doc"][0] if isinstance(c["doc"], list) else c["doc"]
+                if primary != "Live query":
                     qvec = await embeddings.embed_query(c["q"])
                     async with db.secure_session(u) as conn:
                         h = await hybrid(conn, c["q"], qvec)
-                    r["hit_at_5"] = any(c["doc"].lower() in x["title"].lower() for x in h["candidates"][:5])
+                    r["hit_at_5"] = any(primary.lower() in x["title"].lower() for x in h["candidates"][:5])
             rows.append(r)
             mark = "ok " if r["decision_ok"] and r.get("fact_ok", True) else "XX "
             print(f"{mark}{r['as']:14s} {c['expect']:6s} -> {a['mode']:10s} {a['latencyMs']:5d}ms  {c['q']}", flush=True)

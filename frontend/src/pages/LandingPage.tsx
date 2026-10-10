@@ -835,7 +835,7 @@ function TryIt() {
         </div>
         <div className="mt-24 flex flex-wrap items-end justify-between gap-8 border-t border-paper/15 pt-8">
           <div>
-            <div className="font-display text-[30px]">Team FriendlyFire</div>
+            <div className="font-display text-[30px]">Team LemonRice</div>
             <div className="mt-1 text-[14px] text-paper/60">Bhakti Kareliya (team leader) · Tanmay Gajjar · Team ID TXJ8</div>
             <div className="mt-1 text-[13px] text-paper/45">Code Carnival 2026 · Atmiya University · PS-01</div>
           </div>
@@ -843,6 +843,9 @@ function TryIt() {
             <a href="https://github.com/Tanhaker/vaultrag" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 ring-1 ring-paper/25 hover:bg-paper/10">
               Source on GitHub <ArrowUpRight className="size-3.5" />
             </a>
+            <Link to="/demo" className="inline-flex items-center gap-1.5 rounded-full bg-[#7fd1a8] px-4 py-2 font-medium text-ink hover:bg-mark">
+              Guided demo <ArrowRight className="size-3.5" />
+            </Link>
             <Link to="/login" className="inline-flex items-center gap-1.5 rounded-full bg-paper px-4 py-2 font-medium text-ink hover:bg-mark">
               All demo accounts <ArrowRight className="size-3.5" />
             </Link>
