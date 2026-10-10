@@ -1,18 +1,47 @@
-import { ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut, Moon, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { PERSONAS, roleLabel } from "../lib/personas";
 import { useSession } from "../lib/session";
 import { Avatar, ClassBadge, cx } from "./ui";
 
-const NAV = [
+const NAV: { to: string; label: string; role?: string }[] = [
   { to: "/", label: "Story" },
+  { to: "/me", label: "Dashboard", role: "student" },
   { to: "/ask", label: "Ask" },
   { to: "/compare", label: "Compare" },
-  { to: "/knowledge", label: "Knowledge base" },
+  { to: "/knowledge", label: "Knowledge" },
   { to: "/records", label: "Records" },
+  { to: "/insights", label: "Insights", role: "admin" },
   { to: "/security", label: "Trust center" },
 ];
+
+const THEME_KEY = "vaultrag.theme";
+
+function useTheme(): [boolean, () => void] {
+  const [dark, setDark] = useState(() => {
+    try {
+      const v = localStorage.getItem(THEME_KEY);
+      return v ? v === "dark" : window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle("theme-dark", dark);
+    return () => document.documentElement.classList.remove("theme-dark");  // the story page keeps its own palette
+  }, [dark]);
+  const toggle = () =>
+    setDark((d) => {
+      try {
+        localStorage.setItem(THEME_KEY, d ? "light" : "dark");
+      } catch {
+        /* preference just isn't remembered */
+      }
+      return !d;
+    });
+  return [dark, toggle];
+}
 
 export function Mark({ className = "size-7" }: { className?: string }) {
   return (
@@ -120,24 +149,31 @@ function UserSwitcher() {
 }
 
 export function Layout() {
+  const { session } = useSession();
+  const [dark, toggleTheme] = useTheme();
+  const roles = session?.user.roles ?? [];
   return (
     <div className="flex h-dvh flex-col">
       <header className="relative z-30 shrink-0 border-b border-line bg-bg/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-8 gap-y-1 px-4 pt-2.5 sm:px-6 lg:flex-nowrap lg:pt-0">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-5 gap-y-1 px-4 pt-2.5 sm:px-6 lg:flex-nowrap lg:pt-0">
           <Link to="/" aria-label="VaultRAG story"><Logo className="lg:py-3" /></Link>
           <div className="ml-auto flex items-center gap-4 lg:order-3">
             <BackendStatus />
+            <button onClick={toggleTheme} aria-label={dark ? "Switch to light theme" : "Switch to dark theme"} title={dark ? "Light theme" : "Dark theme"}
+                    className="grid size-8 place-items-center rounded-lg text-ink-3 transition-colors hover:bg-panel-2 hover:text-ink">
+              {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            </button>
             <UserSwitcher />
           </div>
           <nav className="-mx-1 flex w-full gap-1 overflow-x-auto lg:order-2 lg:w-auto">
-            {NAV.map(({ to, label }) => (
+            {NAV.filter((n) => !n.role || roles.includes(n.role)).map(({ to, label }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={to === "/"}
                 className={({ isActive }) =>
                   cx(
-                    "relative shrink-0 px-2.5 py-3 text-[13.5px] transition-colors lg:py-[18px]",
+                    "relative shrink-0 px-2.5 py-3 text-[13.5px] transition-colors lg:px-2 lg:py-[18px]",
                     isActive
                       ? "font-medium text-ink after:absolute after:inset-x-2.5 after:bottom-0 after:h-[2px] after:rounded-full after:bg-brand"
                       : "text-ink-3 hover:text-ink",

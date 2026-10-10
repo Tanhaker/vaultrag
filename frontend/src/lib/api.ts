@@ -414,3 +414,32 @@ export const isLive = live;
 
 export { docById };
 export type { Chunk };
+
+// --- dashboards ------------------------------------------------------------------------------------
+
+export interface Reminder { kind: "attendance" | "fee"; level: "high" | "medium" | "low" | "ok"; title: string; detail: string; source: string; fee?: number }
+export interface MySummary {
+  student: { enrollmentNo: string; name: string; department: string; semester: number; cgpa: number | null; attendance: number | null; email: string | null } | null;
+  fees: { academicYear: string; amountDue: number; amountPaid: number; balance: number; dueDate: string; daysLeft: number; status: string; lastPaymentOn: string | null }[];
+  reminders: Reminder[];
+  rules: { attendanceMin: number; condonationMin: number; source: string } | null;
+  scope?: string;
+}
+
+export interface InsightQuestion { question: string; asked: number; refused: number; roles: string[] }
+export interface Insights {
+  days: number;
+  totals: { queries: number; refused: number; cached: number; aiCalls: number; users: number; p50: number | null; p95: number | null };
+  byRole: { role: string; queries: number; refused: number }[];
+  topQuestions: InsightQuestion[];
+  gaps: InsightQuestion[];
+  refusedForSome: InsightQuestion[];
+  hours: number[];
+  perDay: { day: string; count: number }[];
+  modes: { label: string; count: number }[];
+  styles: { label: string; count: number }[];
+  source: string;
+}
+
+export const fetchMySummary = (s: Session) => call<MySummary>("/me/summary", s);
+export const fetchInsights = (s: Session, days = 7) => call<Insights>(`/insights?days=${days}`, s);

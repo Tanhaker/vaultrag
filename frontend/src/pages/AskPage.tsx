@@ -1,5 +1,6 @@
 import { ArrowUp, CircleCheck, HandHeart, Languages, Loader2, MessageSquarePlus, Mic, Quote, ShieldCheck, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AnswerCard } from "../components/AnswerCard";
 import { Mark } from "../components/Layout";
 import { SourceViewer } from "../components/SourceViewer";
@@ -164,6 +165,8 @@ export function AskPage() {
   const [lang, setLang] = useState<ReplyLang>(() => loadPref<ReplyLang>(LANG_KEY, "auto", REPLY_LANGS.map((l) => l[0])));
   const [showOpts, setShowOpts] = useState(false);
   const voice = useVoice(lang, setInput);
+  const [params, setParams] = useSearchParams();
+  const asked = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -173,6 +176,16 @@ export function AskPage() {
     setLiveId(null);
     fetchXray(session!).then(setXray);
   }, [user.email, session]);
+
+  useEffect(() => {
+    const q = params.get("q");
+    if (q && !asked.current && session) {
+      asked.current = true;
+      setParams({}, { replace: true });
+      submit(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, session]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });

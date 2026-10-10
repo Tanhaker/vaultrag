@@ -257,3 +257,34 @@ button:not(:disabled):active {
   .float, .spin-slow, .spin-slower, .dash-flow, .pulse-ring, .sweep::after { animation: none !important; }
   html { scroll-behavior: auto; }
 }
+
+/* Dark theme for the app pages. Layout toggles html.theme-dark; every utility reads these variables,
+   so surfaces, text and accents flip together. Ink and paper swap roles, so "ink" buttons stay high contrast. */
+html.theme-dark {
+  color-scheme: dark;
+  --color-bg: #161411;
+  --color-panel: #1e1b17;
+  --color-panel-2: #2a2620;
+  --color-line: #35302a;
+  --color-line-2: #4a443b;
+  --color-ink: #ede7da;
+  --color-ink-2: #c4bcab;
+  --color-ink-3: #8f8778;
+  --color-paper: #121110;
+  --color-brand: #6fbf95;
+  --color-brand-2: #8fd3ae;
+  --color-brand-soft: #1f3329;
+  --color-deny: #e0806b;
+  --color-warn: #d9a54a;
+  --color-mark: #6b5a2a;
+  --color-cls-0: #a39b8c;
+  --color-cls-1: #8fb0cc;
+  --color-cls-2: #d9a54a;
+  --color-cls-3: #e0806b;
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -18px rgba(0, 0, 0, 0.7);
+  --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+}
+html.theme-dark body::before {
+  opacity: 0.5;
+  mix-blend-mode: soft-light;
+}

@@ -354,3 +354,16 @@ async def test_explain_reveals_only_own_sources(api):
         return ok, f"student sees {len(student['sources'])} · hod allowed={hod['sources'] and hod['sources'][0]['decision']['allowed']}"
     await attack("Ask “why can I see this?” about someone else's source", "existence", "Student",
                  "explanation runs under RLS on the caller's own context", check)
+
+
+async def test_dashboards_stay_in_scope(api):
+    async def check():
+        me = (await api.req(STUDENT, "GET", "/me/summary")).json()
+        hod = (await api.req(HOD_CSE, "GET", "/me/summary")).json()
+        denied = (await api.req(STUDENT, "GET", "/insights")).status_code
+        admin = (await api.req(ADMIN, "GET", "/insights")).json()
+        ok = (me["student"] and me["student"]["enrollmentNo"] == "AU23CSE001" and hod["student"] is None
+              and denied == 403 and admin["totals"]["queries"] >= 1)
+        return ok, f"student={me['student'] and me['student']['enrollmentNo']} hod={hod['student']} insights-as-student={denied}"
+    await attack("Read someone else's dashboard, or the admin insights as a student", "lateral", "Student",
+                 "own row under RLS; insights admin-only", check)

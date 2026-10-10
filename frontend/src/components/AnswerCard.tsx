@@ -1,4 +1,4 @@
-import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, HandHeart, Languages, Loader2, Scale, ScanEye, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, HandHeart, Languages, Loader2, Scale, ScanEye, ShieldAlert, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Answer, Citation, Sentence } from "../lib/types";
 import { ExplainModal } from "./ExplainModal";
@@ -133,6 +133,41 @@ function UsageChips({ answer }: { answer: Answer }) {
   );
 }
 
+const VOICE_LANG: Record<string, string> = { en: "en-IN", hinglish: "hi-IN", hi: "hi-IN", gu: "gu-IN" };
+
+/** Read the answer aloud with the browser's own voices (no server, no AI quota). */
+function ListenButton({ answer }: { answer: Answer }) {
+  const [speaking, setSpeaking] = useState(false);
+  const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+  useEffect(() => () => synth?.cancel(), [synth]);
+  if (!synth) return null;
+  function toggle() {
+    if (!synth) return;
+    if (speaking) {
+      synth.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const text = [answer.style?.greeting, ...answer.sentences.filter((s) => !s.removed).map((s) => s.text)].filter(Boolean).join(" ");
+    const u = new SpeechSynthesisUtterance(text.replace(/₹/g, "rupees "));
+    u.lang = VOICE_LANG[answer.style?.lang ?? "en"] ?? "en-IN";
+    const voice = synth.getVoices().find((v) => v.lang === u.lang) ?? synth.getVoices().find((v) => v.lang.startsWith(u.lang.slice(0, 2)));
+    if (voice) u.voice = voice;
+    u.rate = 0.98;
+    u.onend = u.onerror = () => setSpeaking(false);
+    synth.cancel();
+    synth.speak(u);
+    setSpeaking(true);
+  }
+  return (
+    <button onClick={toggle} aria-pressed={speaking} title="Read this answer aloud"
+            className={cx("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] ring-1 transition-colors",
+                          speaking ? "bg-ink text-paper ring-ink" : "text-ink-2 ring-line-2 hover:text-ink")}>
+      {speaking ? <Square className="size-3 fill-current" /> : <Volume2 className="size-3.5" />} {speaking ? "Stop" : "Listen"}
+    </button>
+  );
+}
+
 function WhyButton({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} title="See the access decision behind this answer"
@@ -243,6 +278,7 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
               </span>
               <UsageChips answer={answer} />
               <WhyButton onClick={() => setExplain(true)} />
+              <ListenButton answer={answer} />
             </div>
           ) : (
             <>
@@ -259,6 +295,7 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
                 {answer.mode && answer.mode !== "refused" && <span className="font-mono text-[11px]">{MODE_LABEL[answer.mode]}</span>}
                 <UsageChips answer={answer} />
                 <WhyButton onClick={() => setExplain(true)} />
+                <ListenButton answer={answer} />
                 {answer.receipt && (
                   <button onClick={() => setReceipt(true)} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] text-brand ring-1 ring-brand/30 transition-colors hover:bg-brand-soft">
                     <FileSignature className="size-3.5" /> Receipt
