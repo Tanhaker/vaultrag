@@ -1,4 +1,4 @@
-import { ArrowUp, CircleCheck, HandHeart, Languages, Loader2, MessageSquarePlus, Quote, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ArrowUp, CircleCheck, HandHeart, Languages, Loader2, MessageSquarePlus, Mic, Quote, ShieldCheck, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AnswerCard } from "../components/AnswerCard";
 import { Mark } from "../components/Layout";
@@ -28,6 +28,49 @@ const BHAI_QUESTIONS = [
   "Bhai yaar, B.Tech ki fees kitni hai is saal?",
   "ભાઈ, પરીક્ષા માટે ઓછામાં ઓછી કેટલી હાજરી જોઈએ?",
 ];
+
+// Voice input: the browser's own speech recognition (Chrome, Edge, Safari). No server, no AI quota.
+type Recognition = {
+  lang: string; interimResults: boolean; continuous: boolean;
+  onresult: ((e: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
+  onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null;
+  start: () => void; stop: () => void;
+};
+const SpeechAPI: (new () => Recognition) | undefined =
+  typeof window === "undefined" ? undefined
+    : ((window as unknown as Record<string, unknown>).SpeechRecognition ?? (window as unknown as Record<string, unknown>).webkitSpeechRecognition) as (new () => Recognition) | undefined;
+const SPEECH_LANG: Record<ReplyLang, string> = { auto: "en-IN", en: "en-IN", hinglish: "hi-IN", hi: "hi-IN", gu: "gu-IN" };
+
+function useVoice(lang: ReplyLang, onText: (t: string) => void) {
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const rec = useRef<Recognition | null>(null);
+  function toggle(base: string) {
+    if (!SpeechAPI) return;
+    if (listening) {
+      rec.current?.stop();
+      return;
+    }
+    const r = new SpeechAPI();
+    r.lang = SPEECH_LANG[lang];
+    r.interimResults = true;
+    r.continuous = false;
+    const prefix = base.trim() ? base.trim() + " " : "";
+    r.onresult = (e) => {
+      let text = "";
+      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+      onText(prefix + text);
+    };
+    r.onerror = (e) => setVoiceError(e.error === "not-allowed" ? "Microphone permission was blocked." : `Voice input stopped (${e.error}).`);
+    r.onend = () => setListening(false);
+    rec.current = r;
+    setVoiceError(null);
+    setListening(true);
+    r.start();
+  }
+  useEffect(() => () => rec.current?.stop(), []);
+  return { supported: !!SpeechAPI, listening, voiceError, toggle };
+}
 
 function loadPref<T extends string>(key: string, fallback: T, allowed: readonly string[]): T {
   try {
@@ -119,6 +162,8 @@ export function AskPage() {
   const [verbatim, setVerbatim] = useState(loadVerbatim);
   const [tone, setTone] = useState<Tone>(() => loadPref<Tone>(TONE_KEY, "auto", TONES.map((t) => t[0])));
   const [lang, setLang] = useState<ReplyLang>(() => loadPref<ReplyLang>(LANG_KEY, "auto", REPLY_LANGS.map((l) => l[0])));
+  const [showOpts, setShowOpts] = useState(false);
+  const voice = useVoice(lang, setInput);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -287,12 +332,12 @@ export function AskPage() {
         </div>
 
         <form onSubmit={onSubmit} className="border-t border-line bg-bg/90 px-4 py-3 backdrop-blur sm:px-6">
-          {error && (
+          {(error || voice.voiceError) && (
             <div className="fade-up mx-auto mb-2 flex max-w-3xl items-center gap-2 rounded-xl bg-warn/[0.09] px-3 py-2 text-[12.5px] text-ink-2 ring-1 ring-warn/25">
-              <TriangleAlert className="size-4 shrink-0 text-warn" /> {error}
+              <TriangleAlert className="size-4 shrink-0 text-warn" /> {error ?? voice.voiceError}
             </div>
           )}
-          <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center justify-between gap-2 text-[12px]">
+          <div className={cx("mx-auto mb-2 max-w-3xl flex-wrap items-center justify-between gap-2 text-[12px] sm:flex", showOpts ? "flex" : "hidden")}>
             <button
               type="button"
               onClick={toggleVerbatim}
@@ -329,6 +374,17 @@ export function AskPage() {
             )}
           </div>
           <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-[18px] bg-paper p-2 shadow-card ring-1 ring-line-2 transition-shadow focus-within:ring-2 focus-within:ring-brand">
+            <button
+              type="button"
+              onClick={() => setShowOpts((v) => !v)}
+              aria-expanded={showOpts}
+              aria-label="Reply style and verbatim options"
+              className={cx("relative grid size-9 shrink-0 place-items-center rounded-[12px] transition-colors sm:hidden",
+                            showOpts ? "bg-ink text-paper" : "text-ink-3 hover:bg-panel-2 hover:text-ink")}
+            >
+              <SlidersHorizontal className="size-4" />
+              {(verbatim || tone !== "auto" || lang !== "auto") && !showOpts && <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-brand" />}
+            </button>
             <textarea
               rows={1}
               value={input}
@@ -339,9 +395,22 @@ export function AskPage() {
                   submit(input);
                 }
               }}
-              placeholder="Ask about budgets, fees, policies…"
-              className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent px-2 py-2 text-[14.5px] outline-none placeholder:text-ink-3"
+              placeholder={voice.listening ? "Listening…" : "Ask anything: fees, exams, policies…"}
+              className="max-h-40 min-h-[40px] min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-[14.5px] placeholder:truncate outline-none placeholder:text-ink-3"
             />
+            {voice.supported && (
+              <button
+                type="button"
+                onClick={() => voice.toggle(input)}
+                aria-pressed={voice.listening}
+                aria-label={voice.listening ? "Stop voice input" : "Ask by voice"}
+                title={`Ask by voice (${SPEECH_LANG[lang]}). Speech is recognised by your browser.`}
+                className={cx("grid size-9 shrink-0 place-items-center rounded-[12px] transition-colors",
+                              voice.listening ? "pulse-ring bg-deny text-paper" : "text-ink-3 hover:bg-panel-2 hover:text-ink")}
+              >
+                {voice.listening ? <Square className="size-3.5 fill-current" /> : <Mic className="size-4" />}
+              </button>
+            )}
             <button
               type="submit"
               disabled={!input.trim() || busy}
@@ -351,7 +420,7 @@ export function AskPage() {
               {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
             </button>
           </div>
-          <p className="mx-auto mt-2 max-w-3xl text-center text-[11.5px] text-ink-3">
+          <p className="mx-auto mt-2 hidden max-w-3xl text-center text-[11.5px] text-ink-3 sm:block">
             Retrieval runs as <span className="font-mono">rag_reader</span> under Postgres RLS. The model only ever sees chunks you're
             authorised to read.
           </p>

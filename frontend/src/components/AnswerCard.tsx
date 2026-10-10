@@ -1,6 +1,7 @@
-import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, HandHeart, Languages, Loader2, ScanEye, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, HandHeart, Languages, Loader2, Scale, ScanEye, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Answer, Citation, Sentence } from "../lib/types";
+import { ExplainModal } from "./ExplainModal";
 import { ReceiptModal } from "./ReceiptModal";
 import { ClassBadge, ModalityTag, SourceIcon, cx } from "./ui";
 
@@ -132,10 +133,20 @@ function UsageChips({ answer }: { answer: Answer }) {
   );
 }
 
+function WhyButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} title="See the access decision behind this answer"
+            className="inline-flex items-center gap-1 rounded-md bg-brand px-1.5 py-0.5 text-[12px] text-paper transition-colors hover:bg-brand/90">
+      <Scale className="size-3.5" /> Why this answer?
+    </button>
+  );
+}
+
 export function AnswerCard({ answer, live = false, streamed = false, compact = false, activeCite, onCite, onDone }: Props) {
   const kept = useMemo(() => answer.sentences.filter((s) => !s.removed), [answer]);
   const totalChars = useMemo(() => kept.reduce((a, s) => a + s.text.length + 1, 0), [kept]);
   const [receipt, setReceipt] = useState(false);
+  const [explain, setExplain] = useState(false);
   const [stepIdx, setStepIdx] = useState(live && !streamed ? 0 : answer.steps.length);
   const [chars, setChars] = useState(live ? 0 : totalChars);
   const [traceCollapsed, setTraceCollapsed] = useState(!live || compact || streamed);
@@ -231,6 +242,7 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
                 Uniform refusal: identical whether the data doesn't exist or you aren't authorised.
               </span>
               <UsageChips answer={answer} />
+              <WhyButton onClick={() => setExplain(true)} />
             </div>
           ) : (
             <>
@@ -246,6 +258,7 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
                 <span>{answer.citations.length} {answer.citations.length === 1 ? "source" : "sources"}</span>
                 {answer.mode && answer.mode !== "refused" && <span className="font-mono text-[11px]">{MODE_LABEL[answer.mode]}</span>}
                 <UsageChips answer={answer} />
+                <WhyButton onClick={() => setExplain(true)} />
                 {answer.receipt && (
                   <button onClick={() => setReceipt(true)} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] text-brand ring-1 ring-brand/30 transition-colors hover:bg-brand-soft">
                     <FileSignature className="size-3.5" /> Receipt
@@ -264,6 +277,7 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
         </div>
       )}
       {receipt && answer.receipt && <ReceiptModal answer={answer} onClose={() => setReceipt(false)} />}
+      {explain && <ExplainModal answer={answer} onClose={() => setExplain(false)} />}
     </div>
   );
 }

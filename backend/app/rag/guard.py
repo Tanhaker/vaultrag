@@ -93,6 +93,31 @@ _FOLLOW = re.compile(r"^\s*(?:and|also|same for|then|so)\b", re.I)
 _PRONOUN = re.compile(r"\b(?:it|its|they|them|their|that|those|this|these|he|she|his|her)\b", re.I)
 
 
+_ROLE_WORDS = (r"(?:system\s+)?admin(?:istrator)?|hod|head\s+of\s+(?:the\s+)?department|principal|dean|registrar|"
+               r"finance(?:\s+officer)?|accounts?\s+officer|hr|faculty|professor|teacher|staff|sir|madam|ma'am")
+_CLAIMS = [
+    # "I am the admin", "I'm HOD of CSE", "as the principal"
+    re.compile(rf"\b(?:i\s+am|i'm|im|as)\s+(?:an?\s+|the\s+)?(?:\w+\s+){{0,2}}(?:{_ROLE_WORDS})\b(?:\s+of\s+\w+)?[.,!]?", re.I),
+    # "main bhi CSE ka HOD hoon", "mai admin hu"
+    re.compile(rf"\b(?:main|mai|mein|me)\s+(?:bhi\s+)?(?:\w+\s+){{0,3}}(?:{_ROLE_WORDS})\s+(?:hoon|hun|hu|hai|hoo)\b[.,!]?", re.I),
+    # Hindi / Gujarati: "मैं ... HOD हूँ", "હું ... HOD છું"
+    re.compile(rf"(?:मैं|में)\s+(?:\S+\s+){{0,3}}?(?:{_ROLE_WORDS}|एडमिन|प्रिंसिपल|प्रधानाचार्य|डीन|शिक्षक|प्रोफेसर|विभागाध्यक्ष)\s+(?:हूँ|हूं|हु)[।,!]?", re.I),
+    re.compile(rf"હું\s+(?:\S+\s+){{0,3}}?(?:{_ROLE_WORDS}|એડમિન|પ્રિન્સિપાલ|ડીન|શિક્ષક|પ્રોફેસર|વિભાગાધ્યક્ષ)\s+છું[.,!]?", re.I),
+]
+
+
+def strip_identity_claims(question: str) -> tuple[str, str | None]:
+    """Remove "I am the admin"-style claims from the search text. Identity only ever comes from the
+    signed login token, so a claim in the question can only add noise to retrieval."""
+    claim = None
+    for rx in _CLAIMS:
+        m = rx.search(question)
+        if m:
+            claim = claim or m.group(0).strip(" .,!")
+            question = rx.sub(" ", question)
+    return re.sub(r"\s+", " ", question).strip(" ,"), claim
+
+
 def rewrite_followup(question: str, history: list[dict]) -> str | None:
     """A standalone version of a follow-up question, or None when it already stands alone.
     Deterministic on purpose: no model call, and the rewrite is shown to the user."""

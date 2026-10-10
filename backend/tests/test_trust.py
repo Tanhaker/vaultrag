@@ -166,3 +166,21 @@ async def test_egress_redacts_phone_numbers(world):
 
 def test_documents_matrix_covers_every_doc():
     assert {"handbook", "cse_budget", "appraisal", "personal_letter"} <= set(DOCS)
+
+
+async def test_question_embeddings_are_private(world):
+    a, b = USERS["student_cse"], USERS["student_mech"]
+    vec = "[" + ",".join(["0.01"] * 768) + "]"
+    async with db.secure_session(a, read_only=False) as conn:
+        await conn.execute("INSERT INTO query_embeddings (tenant_id, user_id, key, model, embedding)"
+                           " VALUES (%s, %s, 'k-test', 'm', %s::vector) ON CONFLICT DO NOTHING", (a.tid, a.uid, vec))
+    async with db.secure_session(a) as conn:
+        assert (await (await conn.execute("SELECT count(*) AS n FROM query_embeddings WHERE key = 'k-test'")).fetchone())["n"] == 1
+    async with db.secure_session(b) as conn:
+        assert (await (await conn.execute("SELECT count(*) AS n FROM query_embeddings")).fetchone())["n"] == 0
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        async with db.secure_session(b, read_only=False) as conn:  # cannot write a row as someone else
+            await conn.execute("INSERT INTO query_embeddings (tenant_id, user_id, key, model, embedding)"
+                               " VALUES (%s, %s, 'k-forged', 'm', %s::vector)", (a.tid, a.uid, vec))
+    async with db.writer_session() as conn:
+        await conn.execute("DELETE FROM query_embeddings WHERE key LIKE 'k-%%'")

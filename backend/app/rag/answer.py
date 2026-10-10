@@ -347,6 +347,35 @@ async def _serve_cached(user: UserCtx, question: str, hit: dict, layer: str, key
     return out
 
 
+# --- question embeddings, cached per user ------------------------------------------------------
+
+async def _embed_cached(user: UserCtx, text: str) -> tuple[list[float] | None, bool]:
+    """The question's vector, from query_embeddings when this user asked it before (RLS: own rows
+    only, keyed by a hash), else from the embedding model, stored for next time."""
+    if embeddings.provider() != "gemini":
+        return await embeddings.embed_query(text), False
+    key = hashlib.sha256(re.sub(r"\s+", " ", text.strip().lower()).encode()).hexdigest()[:32]
+    model = embeddings.model_tag()
+    try:
+        async with secure_session(user) as conn:
+            row = await (await conn.execute(
+                "SELECT embedding::text AS v FROM query_embeddings WHERE key = %s AND model = %s", (key, model))).fetchone()
+        if row:
+            return json.loads(row["v"]), True
+    except Exception:
+        pass  # table not migrated yet, or a transient error: embed directly
+    vec = await embeddings.embed_query(text)
+    if vec:
+        try:
+            async with secure_session(user, read_only=False) as conn:
+                await conn.execute(
+                    "INSERT INTO query_embeddings (tenant_id, user_id, key, model, embedding) VALUES (%s, %s, %s, %s, %s::vector)"
+                    " ON CONFLICT DO NOTHING", (user.tid, user.uid, key, model, literal(vec)))
+        except Exception:
+            pass
+    return vec, False
+
+
 # --- main entry ------------------------------------------------------------------------------
 
 async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: list[dict] | None = None,
@@ -357,7 +386,8 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
     rewritten = guard.rewrite_followup(question, history)
     effective = rewritten or question
     st = stylemod.resolve(question, tone, lang)
-    search = stylemod.search_text(effective)       # regional words -> English search terms
+    unclaimed, claim = guard.strip_identity_claims(effective)
+    search = stylemod.search_text(unclaimed or effective)   # regional words -> English search terms
     key = guard.cache_key(effective, verbatim, st.key)
     usage = gemini.begin_usage()
 
@@ -378,6 +408,9 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
         timer.step("followup", "Follow-up rewritten", f"“{question}” → “{rewritten}”")
     if not allow_llm:
         timer.step("budget", "Quota guard", f"{why} → verbatim composer")
+    if claim:
+        timer.step("claim", "Identity claim ignored",
+                   f"“{claim[:60]}” · identity comes only from your signed login ({', '.join(user.roles)})")
     if st.key:
         how = "matched to your message" if st.detected else "your pick"
         timer.step("style", "Reply style", f"{st.label} · {how} · wording only, same sources and rules"
@@ -400,8 +433,10 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
             xray = {"candidates": n_rows, "visible": n_rows, "filtered": 0}
 
     if not handled:
-        qvec = await embeddings.embed_query(search)
-        timer.step("embed", "Embed question", f"{embeddings.provider()} · {s.embedding_dim}-d" if qvec else "embedding unavailable → lexical only")
+        qvec, vec_cached = await _embed_cached(user, search)
+        timer.step("embed", "Embed question",
+                   (f"{embeddings.provider()} · {s.embedding_dim}-d" + (" · cached vector, 0 quota" if vec_cached else ""))
+                   if qvec else "embedding unavailable → lexical only")
         async with secure_session(user) as conn:
             h = await hybrid(conn, search, qvec)
         timer.step("search", "Hybrid search under RLS",

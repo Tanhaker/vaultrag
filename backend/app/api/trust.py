@@ -331,3 +331,36 @@ async def audit_chain(user: CurrentUser) -> dict:
     if v is None:
         raise HTTPException(403)
     return v
+
+
+class ExplainIn(BaseModel):
+    chunkIds: list[str] = Field(default_factory=list, max_length=20)
+
+
+@router.post("/answers/explain")
+async def explain_answer(body: ExplainIn, user: CurrentUser) -> dict:
+    """Why the caller may read each cited source: acl_explain() evaluated by the database on the
+    caller's own signed context. Runs as rag_reader under RLS, so a source the caller cannot read is
+    simply absent (indistinguishable from one that does not exist)."""
+    ids = []
+    for c in body.chunkIds:
+        try:
+            ids.append(str(UUID(c)))
+        except ValueError:
+            continue  # sql-… citations are explained by the client: rows filtered by table RLS
+    rows = []
+    if ids:
+        async with secure_session(user) as conn:
+            rows = await (await conn.execute(
+                "SELECT c.id::text AS id, d.title, d.source_type, c.classification, c.department, c.allowed_roles,"
+                "       cardinality(c.allowed_users) AS granted_users,"
+                "       acl_explain(app_ctx(), c.tenant_id, c.classification, c.department, c.allowed_roles, c.allowed_users) AS e"
+                "  FROM chunks c JOIN documents d ON d.id = c.document_id WHERE c.id = ANY(%s::uuid[])", (ids,))).fetchall()
+    return {
+        "identity": {"email": user.email, "roles": user.roles, "depts": user.depts, "clearance": user.clearance,
+                     "department": user.department, "source": "signed login token → HMAC-signed database context"},
+        "sources": [{"chunkId": r["id"], "title": r["title"], "sourceType": r["source_type"],
+                     "classification": r["classification"], "department": r["department"],
+                     "allowedRoles": r["allowed_roles"], "grantedUsers": r["granted_users"], "decision": r["e"]} for r in rows],
+        "engine": "acl_explain() → acl_check(), the function every RLS policy calls",
+    }

@@ -315,6 +315,20 @@ export interface ReceiptCheck {
   verdict: "valid" | "forged" | "stale";
 }
 
+export interface AccessDecision { allowed: boolean; tenant: boolean; grant: boolean; clearance: boolean; role: boolean; dept: boolean }
+export interface Explanation {
+  identity: { email: string; roles: string[]; depts: string[]; clearance: number; department: string | null; source: string };
+  sources: { chunkId: string; title: string; sourceType: string; classification: number; department: string | null;
+             allowedRoles: string[]; grantedUsers: number; decision: AccessDecision }[];
+  engine: string;
+}
+
+/** acl_explain() on the caller's own signed context, for the sources cited in an answer. */
+export async function explainAnswer(s: Session, chunkIds: string[]): Promise<Explanation> {
+  if (!live(s)) throw new Error("offline");
+  return call<Explanation>("/answers/explain", s, { method: "POST", body: JSON.stringify({ chunkIds }) });
+}
+
 export const verifyReceipt = (s: Session, receipt: Receipt, sentences?: string[]) =>
   call<ReceiptCheck>("/receipts/verify", s, { method: "POST", body: JSON.stringify({ receipt, sentences }) });
 
