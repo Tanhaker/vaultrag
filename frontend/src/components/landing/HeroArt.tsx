@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
+import { Glyph } from "../Layout";
 import { cx } from "../ui";
 
-/** The vault seal: concentric rings with engraved text, the mark at the centre, and the four kinds
+/** The DefRAG seal: concentric rings with engraved text, the mark at the centre, and the four kinds
  *  of source orbiting it. Scroll pushes the sources outward; the pointer tilts the composition. */
 export function HeroArt({ progress }: { progress: number }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -56,11 +57,7 @@ export function HeroArt({ progress }: { progress: number }) {
 
       {/* the mark */}
       <div className="absolute top-1/2 left-1/2 grid size-[19%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-[26%] bg-paper shadow-[0_20px_60px_-10px_rgba(36,84,63,0.7)]">
-        <svg viewBox="0 0 32 32" className="size-[62%]">
-          <circle cx="16" cy="13" r="4.2" fill="#1d1b17" />
-          <path d="M13.6 15.6h4.8l1.5 8.4h-7.8z" fill="#1d1b17" />
-          <circle cx="16" cy="13" r="1.5" fill="#3f8a66" />
-        </svg>
+        <Glyph className="size-[96%]" />
       </div>
 
       {/* orbiting sources */}

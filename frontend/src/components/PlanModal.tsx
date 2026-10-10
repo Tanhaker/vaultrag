@@ -90,6 +90,7 @@ export function PlanModal({ email, name, question, onClose }: { email: string; n
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[
                   ["chunks this identity sees", `${plan.visibleChunks}`],
+                  ["query vector", plan.vectorSource === "stand-in" ? "stand-in (embedding quota spent; same plan)" : plan.vectorSource === "cached" ? "cached for you" : plan.vectorSource ?? "–"],
                   ["rows removed by RLS", plan.planner.removedByFilter.toLocaleString()],
                   ["HNSW, iterative scan", `${plan.returned.iterative}/${plan.returned.k} rows`],
                   ["HNSW, strict scan", `${plan.returned.strict}/${plan.returned.k} rows`],

@@ -1,4 +1,4 @@
-# VaultRAG: Secure Multi-Modal RAG with Access Control
+# DefRAG: Secure Multi-Modal RAG with Access Control
 
 [![CI](https://github.com/Tanhaker/vaultrag/actions/workflows/ci.yml/badge.svg)](https://github.com/Tanhaker/vaultrag/actions/workflows/ci.yml)
 
@@ -6,7 +6,7 @@ Code Carnival 2026, Atmiya University · PS-01 · Team **FriendlyFire** (TXJ8): 
 
 **Live demo:** https://vaultrag-nine.vercel.app (fictional data; demo accounts below)
 
-VaultRAG answers natural-language questions over PDFs, scanned pages, photographed notices and
+DefRAG answers natural-language questions over PDFs, scanned pages, photographed notices and
 database records. Access control is enforced **inside Postgres, on the same statement that runs the
 vector search**, so application code cannot leak a document the caller isn't cleared for: the
 database never returns it. Every sentence of every answer is cited to an exact page region, image

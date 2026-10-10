@@ -66,7 +66,7 @@ export function LoginPage() {
             </h1>
           </div>
           <p className="mt-7 max-w-[34rem] text-[16px] leading-[1.65] text-ink-2">
-            VaultRAG answers questions over the university's PDFs, scanned notices and database records. Ask the same question as a
+            DefRAG answers questions over the university's PDFs, scanned notices and database records. Ask the same question as a
             student, a head of department and the finance office, and you get three different answers, each one cited, none of them
             showing more than that person is cleared to read.
           </p>

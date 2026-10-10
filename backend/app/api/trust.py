@@ -75,9 +75,12 @@ async def query_plan(body: PlanIn, user: CurrentUser) -> dict:
     evaluated inside the scan of chunks, before any row reaches the application."""
     if not get_settings().demo_mode and "admin" not in user.roles:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    qvec = await embeddings.embed_query(body.question)
+    # The plan's shape does not depend on the vector's values, so when the embedding quota is spent a
+    # deterministic stand-in vector of the same dimension shows the identical plan and RLS filter.
+    qvec, cached = await answer._embed_cached(user, body.question)
+    source = "cached" if cached else embeddings.provider()
     if qvec is None:
-        raise HTTPException(503, "Embedding provider unavailable; try again shortly.")
+        qvec, source = embeddings.hash_embed(body.question), "stand-in"
     lit = sql.Literal(literal(qvec))
     stmt = sql.SQL("SELECT id, 1 - (embedding <=> {v}::vector) AS sim FROM chunks"
                    " WHERE embedding IS NOT NULL ORDER BY embedding <=> {v}::vector LIMIT 40").format(v=lit)
@@ -94,6 +97,7 @@ async def query_plan(body: PlanIn, user: CurrentUser) -> dict:
     return {
         "question": body.question, "dbRole": "rag_reader", "planner": planner, "hnsw": hnsw,
         "returned": {"iterative": returned_iterative, "strict": returned_strict, "k": 40}, "visibleChunks": visible,
+        "vectorSource": source,
     }
 
 
@@ -176,7 +180,7 @@ class VerifyIn(BaseModel):
 async def verify_receipt(body: VerifyIn, user: CurrentUser) -> dict:
     r = body.receipt
     if not isinstance(r.get("citations"), list) or "sig" not in r:
-        raise HTTPException(422, "Not a VaultRAG receipt.")
+        raise HTTPException(422, "Not a DefRAG receipt.")
     signature = receipts.check_signature(r)
     answer_ok = None if body.sentences is None else receipts.answer_digest(body.sentences) == r.get("answer_sha256")
     sources = []

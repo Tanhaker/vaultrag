@@ -47,7 +47,7 @@ export function ReceiptModal({ answer, onClose }: { answer: Answer; onClose: () 
     const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `vaultrag-receipt-${receipt.answer_id.slice(0, 8)}.json`;
+    a.download = `defrag-receipt-${receipt.answer_id.slice(0, 8)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -111,7 +111,7 @@ export function ReceiptModal({ answer, onClose }: { answer: Answer; onClose: () 
               {check.verdict === "valid" ? <ShieldCheck className="size-5 shrink-0 text-brand" /> : <ShieldAlert className="size-5 shrink-0 text-deny" />}
               <div className="space-y-1 text-[12.5px]">
                 <div className="font-medium">
-                  {check.verdict === "valid" ? "Receipt valid: this is exactly what VaultRAG answered, and its sources still say the same."
+                  {check.verdict === "valid" ? "Receipt valid: this is exactly what DefRAG answered, and its sources still say the same."
                     : check.verdict === "forged" ? "Signature invalid: the receipt was edited."
                     : "Mismatch: the answer or a source differs from what was signed."}
                 </div>

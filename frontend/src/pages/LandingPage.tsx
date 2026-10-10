@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { HeroArt } from "../components/landing/HeroArt";
 import { StoryArt } from "../components/landing/StoryArt";
-import { Mark } from "../components/Layout";
+import { Mark, Wordmark } from "../components/Layout";
 import { Avatar, ClassBadge, cx } from "../components/ui";
 import { MEASURED } from "../lib/measured";
 import { useCountUp, useInView, useOnScroll, usePageProgress, useReveal, useSectionProgress } from "../lib/motion";
@@ -85,10 +85,9 @@ function TopBar() {
     <header className={cx("fixed inset-x-0 top-0 z-40 transition-colors duration-500",
                           scrolled && (dark ? "bg-ink/40 backdrop-blur-md" : "bg-bg/85 shadow-[0_1px_0_var(--color-line)] backdrop-blur-md"))}>
       <div className="mx-auto flex max-w-[1320px] items-center gap-6 px-5 py-3.5 sm:px-8">
-        <Link to="/" className="flex items-center gap-2.5" aria-label="VaultRAG home">
-          <Mark className={cx("size-7 rounded-lg", dark && "ring-1 ring-paper/35")} />
-          <span className={cx("font-display text-[23px] leading-none tracking-[-0.01em]", dark ? "text-paper" : "text-ink")}>Vault</span>
-          <span className={cx("font-mono text-[11px] font-medium tracking-[0.18em]", dark ? "text-paper/60" : "text-ink-2")}>RAG</span>
+        <Link to="/" className="flex items-center gap-2.5" aria-label="DefRAG home">
+          <Mark className="size-7" />
+          <Wordmark light={dark} />
         </Link>
         <nav className={cx("ml-4 hidden gap-5 text-[13px] lg:flex", dark ? "text-paper/65" : "text-ink-3")}>
           {[["problem", "Problem"], ["how", "How it works"], ["internals", "Internals"], ["proof", "Proof"], ["judges", "For judges"]].map(([id, l]) => (
@@ -197,7 +196,7 @@ function Hero() {
             <em className="word text-[#7fd1a8]" style={{ ["--d" as string]: "420ms" }}>Leak nothing.</em>
           </h1>
           <p className="rise mt-8 max-w-[36rem] text-[17px] leading-[1.65] text-paper/75" style={{ ["--d" as string]: "620ms" }}>
-            VaultRAG answers questions over PDFs, scanned pages, photographed notices and database rows, and lets the database itself decide
+            DefRAG answers questions over PDFs, scanned pages, photographed notices and database rows, and lets the database itself decide
             what each person may see: inside the vector search, before a single forbidden word reaches the application or the model.
           </p>
           <div className="rise mt-9 flex flex-wrap items-center gap-3" style={{ ["--d" as string]: "780ms" }}>
@@ -284,7 +283,7 @@ function Problem() {
           <div className="reveal rounded-[24px] bg-panel p-5 shadow-card ring-1 ring-brand/30 sm:p-6" style={{ ["--d" as string]: "220ms" }}>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <div className="text-[15px] font-medium">VaultRAG: filter inside the scan</div>
+                <div className="text-[15px] font-medium">DefRAG: filter inside the scan</div>
                 <div className="text-[12.5px] text-ink-3">Postgres RLS + pgvector iterative HNSW scan</div>
               </div>
               <span className="rounded-full bg-brand-soft px-2.5 py-1 font-mono text-[11px] text-brand">recall {pct(NUM.iterative)}</span>
@@ -338,7 +337,7 @@ function Story() {
     <section id="how" className="relative scroll-mt-16 bg-panel-2/40">
       <div className="mx-auto max-w-[1320px] px-5 pt-28 sm:px-8 sm:pt-36">
         <div data-stop>
-          <Eyebrow n="02">How VaultRAG answers a question</Eyebrow>
+          <Eyebrow n="02">How DefRAG answers a question</Eyebrow>
           <h2 className="mt-6 max-w-4xl font-display text-[42px] leading-[1.02] tracking-[-0.015em] text-balance sm:text-[62px]">
             Six steps between your question and its answer. Four of them happen <em className="text-brand">inside Postgres.</em>
           </h2>
@@ -707,7 +706,7 @@ function Business() {
   const path: [typeof Sigma, string, string][] = [
     [Target, "Pilot", "One department at Atmiya University, free. Measure staff hours saved and leaks (zero)."],
     [Building2, "First customers", "Turn the pilot into a case study; sign 3–5 paying colleges in Gujarat."],
-    [Handshake, "ERP partners", "License VaultRAG as the AI module inside college ERPs. They sell, we earn per campus."],
+    [Handshake, "ERP partners", "License DefRAG as the AI module inside college ERPs. They sell, we earn per campus."],
     [TrendingUp, "New sectors", "Same engine, new roles: schools, hospitals, co-operative banks, law firms."],
   ];
   return (
@@ -857,9 +856,9 @@ function TryIt() {
 
 export function LandingPage() {
   useEffect(() => {
-    document.title = "VaultRAG · Ask anything. Leak nothing.";
+    document.title = "DefRAG · Ask anything. Leak nothing.";
     return () => {
-      document.title = "VaultRAG";
+      document.title = "DefRAG";
     };
   }, []);
   return (

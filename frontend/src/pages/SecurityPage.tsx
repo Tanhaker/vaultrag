@@ -120,7 +120,7 @@ function Overview({ ev, chain }: { ev: EvalResults; chain: AuditChain | null }) 
             <h3 className="text-[13px] font-medium">Why retrieval-layer authorisation</h3>
             <p className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
               Filtering search results in application code is too late: forbidden chunks were already ranked, and low-privilege users lose recall.
-              VaultRAG binds an HMAC-signed identity to every transaction and lets Postgres remove forbidden rows <em>inside</em> the vector scan.
+              DefRAG binds an HMAC-signed identity to every transaction and lets Postgres remove forbidden rows <em>inside</em> the vector scan.
             </p>
           </Card>
           <Card className="p-4">

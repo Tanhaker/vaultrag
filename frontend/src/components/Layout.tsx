@@ -1,5 +1,5 @@
 import { ChevronDown, LogOut, Moon, Sun } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { PERSONAS, roleLabel } from "../lib/personas";
 import { useSession } from "../lib/session";
@@ -43,14 +43,41 @@ function useTheme(): [boolean, () => void] {
   return [dark, toggle];
 }
 
+/** The DefRAG mark: a D assembled from fragments, on a white tile so it reads on light and dark. */
+export function Glyph({ className }: { className?: string }) {
+  const id = useId().replace(/:/g, "");
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={`d${id}`} x1="0.15" y1="0.1" x2="0.95" y2="0.95"><stop offset="0.55" stopColor="#0f1b2b" /><stop offset="1" stopColor="#16a37f" /></linearGradient>
+        <linearGradient id={`g${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#4cc46e" /><stop offset="1" stopColor="#139a7f" /></linearGradient>
+        <linearGradient id={`t${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#14a085" /><stop offset="1" stopColor="#0f3b4a" /></linearGradient>
+      </defs>
+      <path d="M24.5 13.5h12.5a17.5 17.5 0 0 1 0 37h-9.6v-7.2h9.6a10.3 10.3 0 0 0 0-20.6h-7.3z" fill={`url(#d${id})`} />
+      <rect x="27.6" y="23.6" width="9.4" height="8.4" rx="1.4" fill={`url(#t${id})`} />
+      <rect x="34.2" y="29.2" width="5.6" height="5.6" rx="1.2" fill="#0f3b4a" />
+      <rect x="20" y="18.6" width="6.6" height="6.6" rx="1.4" fill={`url(#g${id})`} />
+      <rect x="13.6" y="23.4" width="3.8" height="3.8" rx="0.9" fill="#4cc46e" />
+      <rect x="17.4" y="27.6" width="4" height="4" rx="0.9" fill={`url(#g${id})`} />
+      <rect x="20.8" y="33.4" width="7" height="7" rx="1.4" fill={`url(#g${id})`} />
+    </svg>
+  );
+}
+
 export function Mark({ className = "size-7" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <rect width="32" height="32" rx="8" fill="#1d1b17" />
-      <circle cx="16" cy="13" r="4.2" fill="#fffdf8" />
-      <path d="M13.6 15.6h4.8l1.5 8.4h-7.8z" fill="#fffdf8" />
-      <circle cx="16" cy="13" r="1.5" fill="#24543f" />
-    </svg>
+    <span className={cx("inline-grid shrink-0 place-items-center overflow-hidden rounded-[24%] bg-white ring-1 ring-black/5", className)}>
+      <Glyph className="size-full" />
+    </span>
+  );
+}
+
+/** Wordmark: "Def" in ink, "RAG" in the mark's green. */
+export function Wordmark({ className, light }: { className?: string; light?: boolean }) {
+  return (
+    <span className={cx("font-sans text-[21px] font-semibold leading-none tracking-[-0.025em]", light ? "text-paper" : "text-ink", className)}>
+      Def<span className="bg-gradient-to-r from-[#22b07a] to-[#139a7f] bg-clip-text text-transparent">RAG</span>
+    </span>
   );
 }
 
@@ -58,10 +85,7 @@ export function Logo({ className }: { className?: string }) {
   return (
     <div className={cx("flex items-center gap-2.5", className)}>
       <Mark />
-      <div className="flex items-baseline gap-1 leading-none">
-        <span className="font-display text-[23px] tracking-[-0.01em]">Vault</span>
-        <span className="font-mono text-[11px] font-medium tracking-[0.18em] text-ink-2">RAG</span>
-      </div>
+      <Wordmark />
     </div>
   );
 }
@@ -156,7 +180,7 @@ export function Layout() {
     <div className="flex h-dvh flex-col">
       <header className="relative z-30 shrink-0 border-b border-line bg-bg/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-5 gap-y-1 px-4 pt-2.5 sm:px-6 lg:flex-nowrap lg:pt-0">
-          <Link to="/" aria-label="VaultRAG story"><Logo className="lg:py-3" /></Link>
+          <Link to="/" aria-label="DefRAG story"><Logo className="lg:py-3" /></Link>
           <div className="ml-auto flex items-center gap-4 lg:order-3">
             <BackendStatus />
             <button onClick={toggleTheme} aria-label={dark ? "Switch to light theme" : "Switch to dark theme"} title={dark ? "Light theme" : "Dark theme"}

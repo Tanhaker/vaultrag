@@ -225,7 +225,7 @@ export function StoryArt({ active, only }: { active: number; only?: number }) {
         <span className="size-2.5 rounded-full bg-deny/50" />
         <span className="size-2.5 rounded-full bg-warn/50" />
         <span className="size-2.5 rounded-full bg-brand/50" />
-        <span className="ml-2 font-mono text-[11px] text-ink-3">vaultrag · {STORY_LABELS[only ?? active]}</span>
+        <span className="ml-2 font-mono text-[11px] text-ink-3">defrag · {STORY_LABELS[only ?? active]}</span>
         <span className="ml-auto font-mono text-[11px] text-ink-3">{String((only ?? active) + 1).padStart(2, "0")}/06</span>
       </div>
       <div className="relative h-[380px] sm:h-[420px]">

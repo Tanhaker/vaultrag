@@ -343,6 +343,7 @@ export interface PlanRun {
 export interface QueryPlan {
   question: string; dbRole: string; planner: PlanRun; hnsw: PlanRun;
   returned: { iterative: number; strict: number; k: number }; visibleChunks: number;
+  vectorSource?: "gemini" | "cached" | "hash" | "stand-in";
 }
 
 export const fetchPlan = (s: Session, question: string) =>

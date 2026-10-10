@@ -1,4 +1,4 @@
-// Offline demo of the VaultRAG query pipeline. The real system runs these steps in
+// Offline demo of the DefRAG query pipeline. The real system runs these steps in
 // FastAPI + Postgres; here they run in the browser so the UI works without a backend.
 // aclAllows() mirrors acl_check() in backend/migrations/003_security.sql exactly.
 

@@ -16,7 +16,7 @@ async def lifespan(_: FastAPI):
     await db.close_pools()
 
 
-app = FastAPI(title="VaultRAG", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="DefRAG", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
