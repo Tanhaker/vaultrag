@@ -46,8 +46,8 @@ class Settings(BaseSettings):
 
     # Quota guard (free-tier Gemini keys allow ~20 requests per model per day). Over a limit the
     # answer is composed verbatim from sources instead of failing.
-    llm_daily_budget: int = 60          # tenant-wide generation calls per Pacific day
-    user_llm_per_10min: int = 12        # generation calls one user may trigger per 10 minutes
+    llm_daily_budget: int = 150         # tenant-wide generation calls per Pacific day (5 free-tier models in the chain)
+    user_llm_per_10min: int = 20        # generation calls one user may trigger per 10 minutes
     query_limit_per_10min: int = 40     # questions per user per 10 minutes (HTTP 429 above)
     attach_per_hour: int = 6            # chat attachments per user per hour (each costs OCR and embedding quota)
     answer_cache_hours: int = 48        # Postgres answer cache lifetime (kb_version still guards it)

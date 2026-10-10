@@ -502,8 +502,9 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
         depts_asked = mentioned_departments(effective)
         usable = [c for c in cands if not c["injection"] and relevant(c, qn, semantic)
                   and not (depts_asked and c["department"] and c["department"] not in depts_asked)][:6]
-        if doc and not usable:  # the user pointed at their own file: its chunks are the context
-            usable = [c for c in cands if not c["injection"]][:6]
+        if doc:  # the user pointed at their own file: give the model more of it, best matches first
+            seen = {c["id"] for c in usable}
+            usable = (usable + [c for c in cands if not c["injection"] and c["id"] not in seen])[:10]
         timer.step("rerank", "RRF fusion + rerank", f"{len(usable)} kept of {len(cands)} fused")
         timer.step("guard", "Injection scan",
                    f"{len(quarantined_rows)} chunk quarantined (prompt-injection pattern)" if quarantined_rows else "no injection patterns")

@@ -237,6 +237,16 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
         </div>
       )}
 
+      {stepIdx >= answer.steps.length && answer.llm && !answer.llm.allowed && !answer.cache && /budget|fair-use/.test(answer.llm.reason) && (
+        <div className="fade-up flex items-start gap-2 rounded-lg bg-warn/[0.08] px-3 py-2 text-[12.5px] text-ink-2 ring-1 ring-warn/25">
+          <Cpu className="mt-0.5 size-3.5 shrink-0 text-warn" />
+          <span>
+            The AI is paused ({answer.llm.reason}), so this answer is quoted word for word from the sources instead of written out.
+            {answer.llm.reason.startsWith("fair-use") ? " Wait a few minutes and ask again." : " Full answers come back when the daily quota resets."}
+          </span>
+        </div>
+      )}
+
       {stepIdx >= answer.steps.length && answer.style?.greeting && !answer.refused && (
         <div className="fade-up flex items-center gap-1.5 text-[14px] text-brand">
           <HandHeart className="size-4 shrink-0" /> {answer.style.greeting}
