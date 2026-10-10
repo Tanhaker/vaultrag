@@ -99,7 +99,8 @@ def llm_allowed(pf: Preflight, verbatim: bool) -> tuple[bool, str]:
 
 _WHAT_ABOUT = re.compile(r"^\s*(?:and\s+)?(?:what|how)\s+about\s+(.+?)\s*\??\s*$", re.I)
 _FOLLOW = re.compile(r"^\s*(?:and|also|same for|then|so)\b", re.I)
-_PRONOUN = re.compile(r"\b(?:it|its|they|them|their|that|those|this|these|he|she|his|her)\b", re.I)
+_PRONOUN = re.compile(r"\b(?:it|its|they|them|their|he|she|his|her)\b"
+                      r"|\b(?:that|those|this|these)\b(?=\s*(?:$|[?.!,]|is\b|are\b|was\b|were\b|one\b|mean))", re.I)
 
 
 _ROLE_WORDS = (r"(?:system\s+)?admin(?:istrator)?|hod|head\s+of\s+(?:the\s+)?department|principal|dean|registrar|"

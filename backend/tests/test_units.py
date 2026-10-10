@@ -236,3 +236,20 @@ def test_table_quotes_only_the_rows_asked_about():
     assert _table_sentence(cal, ["exam", "when"]) == "End-semester examinations begin: 14 December 2026."
     pl = "Department | Eligible | Placed | Placed %\nCSE | 118 | 109 | 92%\nEC | 84 | 71 | 85%"
     assert _table_sentence(pl, ["cse", "placement"]) == "CSE: Eligible 118, Placed 109, Placed % 92%."
+
+
+
+def test_demonstrative_noun_phrase_is_not_a_follow_up():
+    hist = [{"question": "check this out"}]
+    assert guard.rewrite_followup("Find the names of the members in this team ppt", hist) is None
+    assert guard.rewrite_followup("what does this mean?", hist) is not None
+    assert guard.rewrite_followup("is it public?", hist) is not None
+
+
+def test_extractive_quotes_short_lines_from_a_chosen_file():
+    from app.rag.answer import extractive
+    chunk = lambda t, s: {"content": t, "modality": "text", "title": "deck.pdf", "score": s}
+    usable = [chunk("Bhakti Kareliya team leader", 0.5), chunk("Tanmay Gajjar team member. PS-01 Code Carnival 2026", 0.48)]
+    assert extractive("names of the team members", usable) == []
+    out = extractive("names of the team members", usable, lenient=True)
+    assert [o["text"] for o in out][:2] == ["Bhakti Kareliya team leader", "Tanmay Gajjar team member."]

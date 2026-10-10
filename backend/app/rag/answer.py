@@ -131,26 +131,28 @@ def _table_sentence(text: str, qt: list[str] | None = None) -> str:
     return "; ".join(f"{r[0]}: " + ", ".join(f"{h} {v}" for h, v in zip(head[1:], r[1:])) for r in body) + "."
 
 
-def extractive(question: str, usable: list[dict]) -> list[dict]:
-    """No-LLM composer: the best-matching sentences, verbatim, each cited to its chunk."""
+def extractive(question: str, usable: list[dict], lenient: bool = False) -> list[dict]:
+    """No-LLM composer: the best-matching sentences, verbatim, each cited to its chunk. lenient: the
+    user pointed at one file, so short lines count and any match is enough."""
     qt = terms(question)
+    min_words, first_bar, other_bar, per_chunk = (2, 0.01, 0.2, 2) if lenient else (6, 0.25, 0.5, 1)
     out: list[dict] = []
     top = usable[0]["score"] if usable else 0
     for i, c in enumerate(usable[:3]):
-        if i and c["score"] < 0.8 * top:
+        if i and c["score"] < (0.5 if lenient else 0.8) * top:
             continue  # only chunks nearly as relevant as the best one contribute
         text = _table_sentence(c["content"], qt) if c["modality"] == "table" else c["content"]
         text = text.removeprefix("Vision caption: ")
         parts = [text] if c["modality"] in ("record", "table") else _SENT.split(text)
         scored = []
         for j, p in enumerate(parts):
-            if len(p.split()) < 6 or p.count("·") >= 4:
+            if len(p.split()) < min_words or p.count("·") >= 4:
                 continue  # fragments and table-of-contents lines
             score = 0.7 * coverage(qt, p) + 0.3 * coverage(qt, f"{c['title']} {p}")
             scored.append((score, j, p))
         scored.sort(key=lambda x: (-x[0], x[1]))
-        for score, _, p in scored[: 2 if i == 0 else 1]:
-            if score >= (0.25 if i == 0 else 0.5):
+        for score, _, p in scored[: 2 if i == 0 else per_chunk]:
+            if score >= (first_bar if i == 0 else other_bar):
                 out.append({"text": p.strip(), "cites": [i + 1]})
     return out[:4]
 
@@ -429,7 +431,7 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
     question = question.strip()[:500]
     asked = stylemod.normalize(question)          # "exammm kabb haiii????" -> "exam kabb hai?"
     history = (history or [])[-3:]
-    rewritten = guard.rewrite_followup(asked, history)
+    rewritten = None if doc else guard.rewrite_followup(asked, history)
     effective = rewritten or asked
     st = stylemod.resolve(asked, tone, lang)
     unclaimed, claim = guard.strip_identity_claims(effective)
@@ -513,7 +515,7 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
             subject = subject_terms(search)
             strict = usable if doc else [c for c in usable if answerable(c, semantic) and on_subject(c, subject)]
             return strict, [{"n": i + 1, "title": c["title"], "text": c["content"]} for i, c in enumerate(strict)], \
-                (extractive(search, strict) if strict else [])
+                (extractive(search, strict, lenient=bool(doc)) if strict else [])
 
         if usable:
             if allow_llm:
