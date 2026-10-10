@@ -1,9 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Glyph } from "../Layout";
-import { cx } from "../ui";
 
-/** The DefRAG seal: concentric rings with engraved text, the mark at the centre, and the four kinds
- *  of source orbiting it. Scroll pushes the sources outward; the pointer tilts the composition. */
+/** The DefRAG seal: concentric rings with engraved text and the mark at the centre. Scroll turns the
+ *  rings; the pointer tilts the mark. */
 export function HeroArt({ progress }: { progress: number }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -18,13 +17,6 @@ export function HeroArt({ progress }: { progress: number }) {
     window.addEventListener("pointermove", move, { passive: true });
     return () => window.removeEventListener("pointermove", move);
   }, []);
-
-  const spread = 1 + progress * 0.55;
-  const card = (depth: number) =>
-    ({
-      transform: `translate3d(calc(var(--mx, 0) * ${depth * 26}px), calc(var(--my, 0) * ${depth * 26}px), 0) scale(${1 - progress * 0.08})`,
-      opacity: 1 - progress * 0.6,
-    }) as const;
 
   return (
     <div ref={ref} className="relative mx-auto aspect-square w-full max-w-[560px] select-none" aria-hidden>
@@ -56,72 +48,11 @@ export function HeroArt({ progress }: { progress: number }) {
       </svg>
 
       {/* the mark */}
-      <div className="absolute top-1/2 left-1/2 grid size-[22%] -translate-x-1/2 -translate-y-1/2 place-items-center drop-shadow-[0_10px_30px_rgba(63,138,102,0.55)]">
+      <div className="absolute top-1/2 left-1/2 grid size-[22%] place-items-center drop-shadow-[0_10px_30px_rgba(63,138,102,0.55)]"
+           style={{ transform: "translate(-50%, -50%) translate3d(calc(var(--mx, 0) * 18px), calc(var(--my, 0) * 18px), 0)", transition: "transform 200ms ease-out" }}>
         <Glyph className="size-full" light />
       </div>
 
-      {/* orbiting sources */}
-      <div className="absolute" style={{ left: `${50 - 41 * spread}%`, top: `${50 - 33 * spread}%` }}>
-        <div className="float" style={{ ["--r" as string]: "-6deg" }}>
-          <div className="w-[150px] rounded-xl bg-paper p-3 shadow-float ring-1 ring-white/40" style={card(1.2)}>
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[8px] tracking-[0.14em] text-ink-3">PDF · p.1</span>
-              <span className="rounded-[3px] border border-cls-2/60 px-1 font-mono text-[7px] tracking-[0.12em] text-cls-2">CONFIDENTIAL</span>
-            </div>
-            <div className="mt-1.5 text-[10.5px] font-medium leading-tight text-ink">CSE Department Budget</div>
-            <div className="mt-2 space-y-1">
-              {[92, 78, 86, 54].map((w, i) => (
-                <div key={i} className={cx("h-[3px] rounded-full", i === 1 ? "bg-mark" : "bg-line-2/80")} style={{ width: `${w}%` }} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute" style={{ left: `${50 + 18 * spread}%`, top: `${50 - 40 * spread}%` }}>
-        <div className="float" style={{ ["--d" as string]: "-2.5s", ["--r" as string]: "5deg" }}>
-          <div className="w-[136px] overflow-hidden rounded-xl bg-paper shadow-float ring-1 ring-white/40" style={card(0.8)}>
-            <div className="relative h-[70px] bg-gradient-to-br from-[#8a6a48] to-[#5d4630]">
-              <div className="absolute top-2 left-1/2 h-[56px] w-[64%] -translate-x-1/2 rotate-[-2deg] bg-paper/95 p-1.5 shadow">
-                <div className="h-[3px] w-2/3 rounded bg-ink/70" />
-                <div className="mt-1 h-[2px] w-full rounded bg-ink/30" />
-                <div className="mt-0.5 h-[2px] w-5/6 rounded bg-ink/30" />
-              </div>
-              <div className="absolute top-[14px] left-[22%] h-[24px] w-[58%] rounded-sm border border-dashed border-[#7fd1a8] bg-[#7fd1a8]/15" />
-            </div>
-            <div className="px-2.5 py-1.5 font-mono text-[8px] text-ink-3">photo · OCR box · 17 Oct</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute" style={{ left: `${50 - 44 * spread}%`, top: `${50 + 22 * spread}%` }}>
-        <div className="float" style={{ ["--d" as string]: "-4s", ["--r" as string]: "4deg" }}>
-          <div className="w-[158px] rounded-xl bg-paper px-3 py-2.5 shadow-float ring-1 ring-white/40" style={card(1)}>
-            <div className="flex items-center justify-between font-mono text-[8px] text-ink-3">
-              <span>db://students/AU23CSE001</span>
-              <span className="rounded-[3px] border border-cls-1/50 px-1 text-cls-1">L1</span>
-            </div>
-            <div className="mt-1.5 grid grid-cols-3 gap-1 font-mono text-[8.5px] text-ink-2">
-              <span>CGPA</span><span>8.42</span><span className="text-ink-3">own row</span>
-              <span>fees</span><span>₹73,000</span><span className="text-ink-3">RLS</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute" style={{ left: `${50 + 12 * spread}%`, top: `${50 + 26 * spread}%` }}>
-        <div className="float" style={{ ["--d" as string]: "-1.2s", ["--r" as string]: "-3deg" }}>
-          <div className="w-[176px] rounded-xl bg-paper px-3 py-2.5 shadow-float ring-1 ring-white/40" style={card(1.4)}>
-            <div className="text-[10.5px] leading-snug text-ink">
-              Approved budget is ₹48.5 lakh
-              <span className="ml-1 inline-grid h-[13px] min-w-[13px] place-items-center rounded-[3px] bg-brand px-[2px] align-middle font-mono text-[8px] text-paper">1</span>
-            </div>
-            <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[8px] text-brand">
-              <span className="size-1.5 rounded-full bg-brand" /> verified · signed receipt
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
