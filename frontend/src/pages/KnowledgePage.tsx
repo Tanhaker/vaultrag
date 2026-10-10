@@ -402,7 +402,7 @@ export function KnowledgePage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex min-w-[220px] flex-wrap gap-1">
                       {d.flags?.includes("prompt_injection") && (
                         <Chip tone="warn"><ShieldAlert className="size-3" /> injection flagged</Chip>
                       )}

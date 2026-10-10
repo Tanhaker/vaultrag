@@ -37,12 +37,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    const check = () => backendAlive().then((ok) => alive && setBackend(ok));
+    // Re-check every 30 s while the tab is visible, and as soon as it becomes visible again.
+    const check = () => {
+      if (!document.hidden) backendAlive().then((ok) => alive && setBackend(ok));
+    };
     check();
-    const t = setInterval(check, 15000);
+    const t = setInterval(check, 30000);
+    document.addEventListener("visibilitychange", check);
     return () => {
       alive = false;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", check);
     };
   }, []);
 

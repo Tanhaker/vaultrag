@@ -5,12 +5,43 @@ import { SessionProvider, useSession } from "./lib/session";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 
+// A tab opened before a deploy still asks for the old hashed chunks, which no longer exist. Reload
+// once to pick up the new build instead of rendering a blank page.
+const RELOADED = "vaultrag.chunk-reload";
+function load<T>(factory: () => Promise<T>): Promise<T> {
+  return factory().then(
+    (m) => {
+      try {
+        sessionStorage.removeItem(RELOADED);
+      } catch {
+        /* ignore */
+      }
+      return m;
+    },
+    (err) => {
+      let tried = true;
+      try {
+        tried = sessionStorage.getItem(RELOADED) === "1";
+        if (!tried) sessionStorage.setItem(RELOADED, "1");
+      } catch {
+        /* no storage: reload at most this once */
+        tried = false;
+      }
+      if (!tried) {
+        window.location.reload();
+        return new Promise<T>(() => {});
+      }
+      throw err;
+    },
+  );
+}
+
 // The story page loads first; the app pages (and their demo corpus) load when someone signs in.
-const AskPage = lazy(() => import("./pages/AskPage").then((m) => ({ default: m.AskPage })));
-const ComparePage = lazy(() => import("./pages/ComparePage").then((m) => ({ default: m.ComparePage })));
-const KnowledgePage = lazy(() => import("./pages/KnowledgePage").then((m) => ({ default: m.KnowledgePage })));
-const RecordsPage = lazy(() => import("./pages/RecordsPage").then((m) => ({ default: m.RecordsPage })));
-const SecurityPage = lazy(() => import("./pages/SecurityPage").then((m) => ({ default: m.SecurityPage })));
+const AskPage = lazy(() => load(() => import("./pages/AskPage")).then((m) => ({ default: m.AskPage })));
+const ComparePage = lazy(() => load(() => import("./pages/ComparePage")).then((m) => ({ default: m.ComparePage })));
+const KnowledgePage = lazy(() => load(() => import("./pages/KnowledgePage")).then((m) => ({ default: m.KnowledgePage })));
+const RecordsPage = lazy(() => load(() => import("./pages/RecordsPage")).then((m) => ({ default: m.RecordsPage })));
+const SecurityPage = lazy(() => load(() => import("./pages/SecurityPage")).then((m) => ({ default: m.SecurityPage })));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session } = useSession();

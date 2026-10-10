@@ -75,7 +75,7 @@ export function RecordsPage() {
         </div>
       </SectionTitle>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr] [&>*]:min-w-0">
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[12px] font-medium text-ink-3">Query sent by the API</span>
