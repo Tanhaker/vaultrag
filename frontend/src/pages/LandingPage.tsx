@@ -1,6 +1,6 @@
 import {
-  ArrowDown, ArrowRight, ArrowUpRight, BadgeCheck, Binary, ChevronLeft, ChevronRight, Database, Eye, FileSignature, Fingerprint,
-  GitBranch, Grid3x3, KeyRound, Link2, Loader2, Lock, MessagesSquare, Quote, Radar, ScanSearch, ShieldAlert, ShieldCheck, Sigma, Siren, Timer,
+  ArrowDown, ArrowRight, ArrowUpRight, BadgeCheck, Binary, Building2, ChevronLeft, ChevronRight, Database, Eye, FileSignature, Fingerprint,
+  GitBranch, GraduationCap, Grid3x3, Handshake, IndianRupee, KeyRound, Link2, Loader2, Lock, MessagesSquare, Quote, Radar, Scale, ScanSearch, Server, ShieldAlert, ShieldCheck, Sigma, Siren, Target, Timer, TrendingUp,
 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -45,6 +45,7 @@ const CHAPTERS = [
   { id: "judges", label: "Where to look" },
   { id: "beyond", label: "Beyond the brief" },
   { id: "architecture", label: "Architecture" },
+  { id: "business", label: "Business model" },
   { id: "try", label: "Try it" },
 ];
 
@@ -689,7 +690,117 @@ function Architecture() {
   );
 }
 
-// --- 11. try it ------------------------------------------------------------------------------------
+// --- 11. business model ------------------------------------------------------------------------------
+// Prices, costs and margins are planning estimates, not validated with customers; the copy says so.
+
+function Business() {
+  const why: [typeof Sigma, string, string][] = [
+    [GraduationCap, "Who buys", "Indian colleges and universities: 1,100+ universities and 40,000+ colleges (AISHE), most already running an ERP for fees, marks and HR."],
+    [Scale, "Why now", "Everyone wants an assistant over their own documents. The DPDP Act 2023 turns a leaked mark sheet or salary into a legal liability."],
+    [ShieldCheck, "Why us", "NotebookLM shares a whole notebook; enterprise copilots follow file permissions in a vendor's cloud. We enforce who-sees-what per row, in Postgres, and prove it."],
+  ];
+  const plans: { name: string; who: string; price: string; per: string; items: string[]; hot?: boolean }[] = [
+    { name: "Starter", who: "Small college", price: "₹15–25k", per: "per month", items: ["Policies, circulars, handbooks", "PDF + OCR'd notices", "Up to ~2,000 users"] },
+    { name: "Campus", who: "College or university", price: "₹50k–1.5L", per: "per month", items: ["Everything in Starter", "ERP records under row-level rules", "Trust center, audit chain, receipts"], hot: true },
+    { name: "Enterprise", who: "Large university, government", price: "₹10–25L", per: "per year + setup", items: ["On their own servers", "Custom connectors + SSO", "SLA and security review"] },
+  ];
+  const path: [typeof Sigma, string, string][] = [
+    [Target, "Pilot", "One department at Atmiya University, free. Measure staff hours saved and leaks (zero)."],
+    [Building2, "First customers", "Turn the pilot into a case study; sign 3–5 paying colleges in Gujarat."],
+    [Handshake, "ERP partners", "License VaultRAG as the AI module inside college ERPs. They sell, we earn per campus."],
+    [TrendingUp, "New sectors", "Same engine, new roles: schools, hospitals, co-operative banks, law firms."],
+  ];
+  return (
+    <Section id="business" className="bg-panel-2/40">
+      <div className="mx-auto max-w-[1320px] px-5 py-28 sm:px-8 sm:py-36">
+        <Eyebrow n="10">Business model</Eyebrow>
+        <Headline className="mt-6 max-w-4xl">Every college wants an AI assistant. <em className="text-brand">None can risk a leak.</em></Headline>
+        <p className="reveal mt-6 max-w-2xl text-[15.5px] leading-[1.7] text-ink-2" style={{ ["--d" as string]: "120ms" }}>
+          Generic "secure AI search" is a fight with Microsoft and Google. A focused product for Indian higher education, sold as the assistant that
+          plugs into the existing ERP and obeys its data rules, is an opening.
+        </p>
+
+        <div className="mt-12 grid gap-4 lg:grid-cols-3">
+          {why.map(([Icon, t, b], i) => (
+            <div key={t} className="reveal rounded-[22px] bg-panel p-6 shadow-card ring-1 ring-line" style={{ ["--d" as string]: `${i * 90}ms` }}>
+              <span className="grid size-10 place-items-center rounded-xl bg-brand-soft text-brand"><Icon className="size-4.5" /></span>
+              <div className="mt-4 font-display text-[24px] leading-tight">{t}</div>
+              <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{b}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-20 flex flex-wrap items-end justify-between gap-4">
+          <h3 className="reveal font-display text-[32px] leading-tight sm:text-[40px]">SaaS per campus</h3>
+          <span className="reveal rounded-md bg-mark/60 px-2 py-0.5 font-mono text-[11px] text-ink-2">illustrative pricing · to be validated with pilots</span>
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {plans.map((p, i) => (
+            <div key={p.name}
+                 className={cx("reveal flex flex-col rounded-[24px] p-6 ring-1", p.hot ? "bg-ink text-paper shadow-float ring-ink" : "bg-panel shadow-card ring-line")}
+                 style={{ ["--d" as string]: `${i * 90}ms` }}>
+              <div className="flex items-center justify-between">
+                <span className="text-[15px] font-medium">{p.name}</span>
+                {p.hot && <span className="rounded-full bg-[#7fd1a8]/20 px-2 py-0.5 font-mono text-[10.5px] text-[#7fd1a8]">main plan</span>}
+              </div>
+              <div className={cx("mt-1 text-[13px]", p.hot ? "text-paper/60" : "text-ink-3")}>{p.who}</div>
+              <div className="mt-5 flex items-baseline gap-2">
+                <span className="font-display text-[44px] leading-none tabular-nums">{p.price}</span>
+                <span className={cx("text-[13px]", p.hot ? "text-paper/60" : "text-ink-3")}>{p.per}</span>
+              </div>
+              <ul className="mt-6 space-y-2 text-[13.5px]">
+                {p.items.map((t) => (
+                  <li key={t} className="flex items-start gap-2">
+                    <BadgeCheck className={cx("mt-0.5 size-4 shrink-0", p.hot ? "text-[#7fd1a8]" : "text-brand")} /> {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="reveal mt-4 grid gap-4 rounded-[22px] bg-panel p-6 shadow-card ring-1 ring-line sm:grid-cols-3 [&>*]:min-w-0">
+          {[
+            [IndianRupee, "Under ₹1 per question", "flash-lite model, shared answer cache, verbatim mode with no model at all"],
+            [Server, "Cheap to run", "one Postgres with pgvector; no separate vector database or search cluster"],
+            [TrendingUp, "~70–80% gross margin", "estimated at ₹50k per campus per month; the real cost is people, not servers"],
+          ].map(([Icon, t, b]) => {
+            const I = Icon as typeof Sigma;
+            return (
+              <div key={t as string} className="flex gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-ink text-[#7fd1a8]"><I className="size-4" /></span>
+                <div>
+                  <div className="text-[15px] font-medium">{t as string}</div>
+                  <div className="mt-0.5 text-[13px] leading-relaxed text-ink-3">{b as string}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <h3 className="reveal mt-20 font-display text-[32px] leading-tight sm:text-[40px]">Go to market</h3>
+        <ol className="relative mt-8 grid gap-4 md:grid-cols-4">
+          <div aria-hidden className="absolute top-5 right-[24%] left-5 hidden h-px bg-line-2 md:block" />
+          {path.map(([Icon, t, b], i) => (
+            <li key={t} className="reveal relative" style={{ ["--d" as string]: `${i * 110}ms` }}>
+              <span className="relative grid size-10 place-items-center rounded-full bg-ink text-[#7fd1a8] ring-4 ring-bg"><Icon className="size-4.5" /></span>
+              <div className="mt-4 font-mono text-[11px] text-ink-3">step {i + 1}</div>
+              <div className="mt-1 text-[16px] font-medium">{t}</div>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-3">{b}</p>
+            </li>
+          ))}
+        </ol>
+
+        <p className="reveal mt-14 max-w-3xl text-[13px] leading-relaxed text-ink-3">
+          Before selling: a paid AI tier with an SLA, SSO with the college login, connectors for common ERPs, Gujarati and Hindi, a DPDP compliance pack and an
+          external security review. Prices and margins above are planning estimates, not results.
+        </p>
+      </div>
+    </Section>
+  );
+}
+
+// --- 12. try it ------------------------------------------------------------------------------------
 
 function TryIt() {
   const { go, busy } = useGo();
@@ -702,7 +813,7 @@ function TryIt() {
   return (
     <Section id="try" dark>
       <div className="relative mx-auto max-w-[1320px] px-5 py-28 sm:px-8 sm:py-36">
-        <Eyebrow n="10" light>Try it</Eyebrow>
+        <Eyebrow n="11" light>Try it</Eyebrow>
         <h2 className="reveal mt-6 max-w-4xl font-display text-[48px] leading-[0.98] tracking-[-0.02em] sm:text-[80px]">
           Pick a person. <em className="text-[#7fd1a8]">Ask anything.</em>
         </h2>
@@ -765,6 +876,7 @@ export function LandingPage() {
       <Judges />
       <Beyond />
       <Architecture />
+      <Business />
       <TryIt />
     </div>
   );
