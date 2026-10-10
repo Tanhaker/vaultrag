@@ -1,5 +1,6 @@
 import { ChevronDown, LogOut, Moon, Sun } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { PERSONAS, roleLabel } from "../lib/personas";
 import { useSession } from "../lib/session";
@@ -18,7 +19,9 @@ const NAV: { to: string; label: string; role?: string }[] = [
 
 const THEME_KEY = "vaultrag.theme";
 
-function useTheme(): [boolean, () => void] {
+type ViewTransitionDoc = Document & { startViewTransition?: (cb: () => void) => { ready: Promise<void>; finished: Promise<void> } };
+
+function useTheme(): [boolean, (e?: { clientX: number; clientY: number }) => void] {
   const [dark, setDark] = useState(() => {
     try {
       const v = localStorage.getItem(THEME_KEY);
@@ -31,15 +34,40 @@ function useTheme(): [boolean, () => void] {
     document.documentElement.classList.toggle("theme-dark", dark);
     return () => document.documentElement.classList.remove("theme-dark");  // the story page keeps its own palette
   }, [dark]);
-  const toggle = () =>
-    setDark((d) => {
-      try {
-        localStorage.setItem(THEME_KEY, d ? "light" : "dark");
-      } catch {
-        /* preference just isn't remembered */
-      }
-      return !d;
+
+  /** Switch theme with a circular wipe that grows from the toggle (View Transitions API).
+   *  Browsers without it, and reduced-motion users, switch instantly. */
+  const toggle = (e?: { clientX: number; clientY: number }) => {
+    const next = !dark;
+    try {
+      localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+    } catch {
+      /* preference just isn't remembered */
+    }
+    const doc = document as ViewTransitionDoc;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!doc.startViewTransition || reduce) {
+      setDark(next);
+      return;
+    }
+    const x = e?.clientX ?? window.innerWidth - 40;
+    const y = e?.clientY ?? 32;
+    const r = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+    const t = doc.startViewTransition(() => {
+      document.documentElement.classList.toggle("theme-dark", next);
+      flushSync(() => setDark(next));
     });
+    t.ready
+      .then(() => {
+        document.documentElement.animate(
+          { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] },
+          { duration: 650, easing: "cubic-bezier(.2,.7,.2,1)", pseudoElement: "::view-transition-new(root)" },
+        );
+      })
+      .catch(() => {
+        /* the browser skipped the transition (hidden tab, embedded view): the theme still switched */
+      });
+  };
   return [dark, toggle];
 }
 
@@ -180,7 +208,7 @@ export function Layout() {
           <Link to="/" aria-label="DefRAG story"><Logo className="lg:py-3" /></Link>
           <div className="ml-auto flex items-center gap-4 lg:order-3">
             <BackendStatus />
-            <button onClick={toggleTheme} aria-label={dark ? "Switch to light theme" : "Switch to dark theme"} title={dark ? "Light theme" : "Dark theme"}
+            <button onClick={(e) => toggleTheme(e)} aria-label={dark ? "Switch to light theme" : "Switch to dark theme"} title={dark ? "Light theme" : "Dark theme"}
                     className="grid size-8 place-items-center rounded-lg text-ink-3 transition-colors hover:bg-panel-2 hover:text-ink">
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </button>

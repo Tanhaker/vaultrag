@@ -290,3 +290,13 @@ html.theme-dark body::before {
   opacity: 0.5;
   mix-blend-mode: soft-light;
 }
+
+/* Theme wipe: the new theme is revealed by a growing circle (animated from Layout's useTheme). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
