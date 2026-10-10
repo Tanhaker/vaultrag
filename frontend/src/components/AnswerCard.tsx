@@ -1,4 +1,4 @@
-import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, Loader2, ScanEye, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import { ChevronDown, CircleCheck, CornerDownRight, Cpu, Database, FileSignature, HandHeart, Languages, Loader2, ScanEye, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Answer, Citation, Sentence } from "../lib/types";
 import { ReceiptModal } from "./ReceiptModal";
@@ -115,6 +115,9 @@ function UsageChips({ answer }: { answer: Answer }) {
     else if (!l.allowed && l.reason) chips.push({ icon: Cpu, text: "0 AI calls · quota guard", tone: "warn", title: l.reason });
     else chips.push({ icon: Cpu, text: "0 AI calls", title: "Answered without a generative model" });
   }
+  if (answer.style && (answer.style.tone !== "formal" || answer.style.lang !== "en"))
+    chips.push({ icon: answer.style.tone === "bhai" ? HandHeart : Languages, text: answer.style.label, tone: "brand",
+                 title: `${answer.style.detected ? "Matched to how you wrote the question" : "Your pick"}. Wording only: same sources, citations and access rules. Nothing about you is stored.` });
   if (answer.dlp?.redacted) chips.push({ icon: ScanEye, text: `${answer.dlp.redacted} redacted`, tone: "warn", title: "Egress DLP removed phone or ID numbers" });
   if (answer.dlp?.blocked) chips.push({ icon: ShieldAlert, text: "blocked by egress DLP", tone: "deny", title: `Canary ${answer.dlp.canaries.join(", ")}` });
   return (
@@ -181,6 +184,12 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
             <span className="font-medium">Prompt injection quarantined.</span> A retrieved chunk from “{answer.quarantined[0].doc.title}” contained
             instructions (“ignore all previous instructions…”). It was treated as data and excluded from the model's context.
           </div>
+        </div>
+      )}
+
+      {stepIdx >= answer.steps.length && answer.style?.greeting && !answer.refused && (
+        <div className="fade-up flex items-center gap-1.5 text-[14px] text-brand">
+          <HandHeart className="size-4 shrink-0" /> {answer.style.greeting}
         </div>
       )}
 

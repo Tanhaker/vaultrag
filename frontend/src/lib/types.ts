@@ -103,6 +103,15 @@ export interface PipelineStep {
   ms: number;
 }
 
+/** Reply style ("bhai mode"): wording and language only, never what may be read. */
+export interface AnswerStyle {
+  lang: "en" | "hinglish" | "hi" | "gu";
+  tone: "formal" | "bhai";
+  label: string;
+  detected: boolean;
+  greeting: string | null;
+}
+
 export interface Answer {
   id: string;
   question: string;
@@ -122,6 +131,7 @@ export interface Answer {
   cache?: "memory" | "postgres" | null;
   llm?: LlmUsage;
   receipt?: Receipt;
+  style?: AnswerStyle;
 }
 
 export interface SourceData {

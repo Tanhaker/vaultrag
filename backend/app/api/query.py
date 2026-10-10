@@ -1,5 +1,6 @@
 import asyncio
 import json
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -20,6 +21,8 @@ class QueryIn(BaseModel):
     question: str = Field(min_length=2, max_length=500)
     verbatim: bool = False                              # quote sources only, no generative model
     history: list[Turn] = Field(default_factory=list, max_length=6)
+    tone: Literal["auto", "formal", "bhai"] = "auto"     # reply style; wording only, never access
+    lang: Literal["auto", "en", "hinglish", "hi", "gu"] = "auto"
 
 
 def _too_many(e: RateLimitExceeded) -> HTTPException:
@@ -33,7 +36,7 @@ async def query(body: QueryIn, user: CurrentUser) -> dict:
     """Answer a question from sources the caller may read. Retrieval runs as rag_reader under RLS."""
     try:
         return await answer.run(user, body.question, verbatim=body.verbatim,
-                                history=[t.model_dump() for t in body.history])
+                                history=[t.model_dump() for t in body.history], tone=body.tone, lang=body.lang)
     except RateLimitExceeded as e:
         raise _too_many(e)
 
@@ -47,7 +50,8 @@ async def query_stream(body: QueryIn, user: CurrentUser) -> StreamingResponse:
     async def runner() -> None:
         try:
             out = await answer.run(user, body.question, verbatim=body.verbatim,
-                                   history=[t.model_dump() for t in body.history], on_step=queue.put_nowait)
+                                   history=[t.model_dump() for t in body.history], on_step=queue.put_nowait,
+                                   tone=body.tone, lang=body.lang)
             queue.put_nowait({"type": "answer", "answer": out})
         except RateLimitExceeded:
             queue.put_nowait({"type": "error", "status": 429,

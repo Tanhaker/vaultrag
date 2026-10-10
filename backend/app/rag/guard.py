@@ -35,9 +35,10 @@ def mentioned_departments(question: str) -> set[str]:
     return {d for d, pat in DEPTS.items() if re.search(pat, q)}
 
 
-def cache_key(question: str, verbatim: bool) -> str:
+def cache_key(question: str, verbatim: bool, style: str = "") -> str:
     normalised = re.sub(r"\s+", " ", question.strip().lower())
-    return hashlib.sha256(f"v2|{int(verbatim)}|{normalised}".encode()).hexdigest()[:32]
+    tag = f"v2|{int(verbatim)}|{normalised}" if not style else f"v2|{int(verbatim)}|{style}|{normalised}"
+    return hashlib.sha256(tag.encode()).hexdigest()[:32]
 
 
 @dataclass

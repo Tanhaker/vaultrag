@@ -84,9 +84,14 @@ export function sessionFor(email: string): Promise<Session> {
   return personaSessions.get(email)!;
 }
 
+export type Tone = "auto" | "formal" | "bhai";
+export type ReplyLang = "auto" | "en" | "hinglish" | "hi" | "gu";
+
 export interface AskOptions {
   verbatim?: boolean;
   history?: { question: string }[];
+  tone?: Tone;
+  lang?: ReplyLang;
 }
 
 /** Ask through the real pipeline when connected; the in-browser engine otherwise. */
@@ -94,7 +99,7 @@ export async function ask(question: string, s: Session, opts: AskOptions = {}): 
   if (live(s)) {
     return call<Answer>("/query", s, {
       method: "POST",
-      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [] }),
+      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [], tone: opts.tone ?? "auto", lang: opts.lang ?? "auto" }),
     });
   }
   return demoAsk(question, s.user);
@@ -109,7 +114,7 @@ export async function askStream(question: string, s: Session, opts: AskOptions, 
     r = await fetch(`${BASE}/query/stream`, {
       method: "POST",
       headers: { Authorization: `Bearer ${s.token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [] }),
+      body: JSON.stringify({ question, verbatim: !!opts.verbatim, history: opts.history ?? [], tone: opts.tone ?? "auto", lang: opts.lang ?? "auto" }),
     });
   } catch {
     return ask(question, s, opts);

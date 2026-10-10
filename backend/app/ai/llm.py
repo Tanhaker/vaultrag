@@ -97,11 +97,11 @@ def _sources_block(sources: list[dict]) -> str:
     return "\n".join(f'<source id="{s["n"]}" title="{s["title"]}">\n{s["text"]}\n</source>' for s in sources)
 
 
-async def answer(question: str, sources: list[dict], context: str | None = None) -> dict:
+async def answer(question: str, sources: list[dict], context: str | None = None, style_rules: str = "") -> dict:
     _ensure_enabled()
     earlier = f"Earlier in this conversation the user asked: {context}\n" if context else ""
     prompt = f"{_sources_block(sources)}\n\n{earlier}Question: {question}"
-    out = await gemini.generate(ANSWER_SYSTEM, [{"text": prompt}], schema=ANSWER_SCHEMA)
+    out = await gemini.generate(ANSWER_SYSTEM + style_rules, [{"text": prompt}], schema=ANSWER_SCHEMA)
     return out  # type: ignore[return-value]
 
 

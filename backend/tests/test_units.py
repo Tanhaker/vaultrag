@@ -147,3 +147,43 @@ def test_template_first_and_secure_views():
     assert "students_secure" in template_for("List the phone numbers of CSE students")
     with pytest.raises(SqlRejected):
         validate("SELECT embedding FROM chunks")
+
+
+from app.rag import style  # noqa: E402
+
+
+def test_style_detection():
+    st = style.resolve("Bhai! mujhe yeh cheez samaj nahi aa rahi, ek bhai ki tarah samjha")
+    assert (st.lang, st.tone, st.detected) == ("hinglish", "bhai", True)
+    assert style.resolve("What is the minimum attendance needed?").key == ""
+    assert style.resolve("મારી ફી કેટલી બાકી છે?").lang == "gu"
+    assert style.resolve("मेरी फीस कितनी बाकी है?").lang == "hi"
+    assert style.resolve("What is the fee?", tone="bhai", lang="hi").label == "Bhai mode · हिंदी"
+    assert style.resolve("Bhai fees kitni hai", tone="formal").tone == "formal"
+
+
+def test_style_search_terms_and_wording():
+    assert "fee" in style.search_text("Bhai meri fees kitni baaki hai?")
+    assert "attendance" in style.search_text("exam ke liye kitni hazri chahiye")
+    assert style.search_text("What is the fee?") == "What is the fee?"
+    for lang in style.LANGS:
+        for tone in ("formal", "bhai"):
+            assert style.refusal(style.Style(lang, tone))
+    assert style.refusal(style.Style()) == "I don't have information on that in the sources available to you."
+    assert style.prompt_rules(style.Style()) == "" and "digits" in style.prompt_rules(style.Style("hinglish", "bhai"))
+
+
+def test_cache_key_separates_styles():
+    assert guard.cache_key("q", False) == guard.cache_key("q", False, "")
+    assert guard.cache_key("q", False) != guard.cache_key("q", False, "hinglish-bhai")
+
+
+def test_hinglish_search_drops_filler():
+    assert style.search_text("Bhai, exam dene ke liye minimum kitni attendance chahiye?").split()[:3] == ["exam", "minimum", "attendance"]
+
+
+def test_inline_citation_markers_are_moved():
+    from app.rag.answer import _split_markers
+    out = _split_markers("Bhai, minimum 75% attendance chahiye [1].", [1])
+    assert out == {"text": "Bhai, minimum 75% attendance chahiye.", "cites": [1]}
+    assert _split_markers("Fees 1,35,000 hai [2, 3]", [])["cites"] == [2, 3]

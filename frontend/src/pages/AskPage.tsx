@@ -1,10 +1,10 @@
-import { ArrowUp, CircleCheck, Loader2, MessageSquarePlus, Quote, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ArrowUp, CircleCheck, HandHeart, Languages, Loader2, MessageSquarePlus, Quote, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AnswerCard } from "../components/AnswerCard";
 import { Mark } from "../components/Layout";
 import { SourceViewer } from "../components/SourceViewer";
 import { Avatar, ClassBadge, cx } from "../components/ui";
-import { ApiError, askStream, fetchXray, type Xray } from "../lib/api";
+import { ApiError, askStream, fetchXray, type ReplyLang, type Tone, type Xray } from "../lib/api";
 import { SUGGESTED_QUESTIONS } from "../lib/corpus";
 import { ask as demoAsk, recordAudit } from "../lib/engine";
 import { roleLabel } from "../lib/personas";
@@ -14,6 +14,37 @@ import type { Answer, Citation, PipelineStep } from "../lib/types";
 const threads = new Map<string, Answer[]>();
 const streamedIds = new Set<string>();
 const VERBATIM_KEY = "vaultrag.verbatim";
+
+const TONE_KEY = "vaultrag.tone";
+const LANG_KEY = "vaultrag.lang";
+const TONES: [Tone, string, string][] = [
+  ["auto", "Auto", "Match the tone of each message"],
+  ["formal", "Formal", "Always polite and formal"],
+  ["bhai", "Bhai mode", "Friendly, like an elder brother explaining"],
+];
+const REPLY_LANGS: [ReplyLang, string][] = [["auto", "Same as question"], ["en", "English"], ["hinglish", "Hinglish"], ["hi", "हिंदी"], ["gu", "ગુજરાતી"]];
+const BHAI_QUESTIONS = [
+  "Bhai, exam dene ke liye minimum kitni attendance chahiye?",
+  "Bhai yaar, B.Tech ki fees kitni hai is saal?",
+  "ભાઈ, પરીક્ષા માટે ઓછામાં ઓછી કેટલી હાજરી જોઈએ?",
+];
+
+function loadPref<T extends string>(key: string, fallback: T, allowed: readonly string[]): T {
+  try {
+    const v = localStorage.getItem(key);
+    return v && allowed.includes(v) ? (v as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function savePref(key: string, v: string) {
+  try {
+    localStorage.setItem(key, v);
+  } catch {
+    /* preference just isn't remembered */
+  }
+}
 
 function loadVerbatim(): boolean {
   try {
@@ -86,6 +117,8 @@ export function AskPage() {
   const [pending, setPending] = useState<{ question: string; steps: PipelineStep[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [verbatim, setVerbatim] = useState(loadVerbatim);
+  const [tone, setTone] = useState<Tone>(() => loadPref<Tone>(TONE_KEY, "auto", TONES.map((t) => t[0])));
+  const [lang, setLang] = useState<ReplyLang>(() => loadPref<ReplyLang>(LANG_KEY, "auto", REPLY_LANGS.map((l) => l[0])));
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -128,7 +161,7 @@ export function AskPage() {
     setPending({ question, steps: [] });
     let a: Answer;
     try {
-      a = await askStream(question, session!, { verbatim, history }, (step) =>
+      a = await askStream(question, session!, { verbatim, history, tone, lang }, (step) =>
         setPending((p) => (p ? { ...p, steps: [...p.steps, step] } : p)),
       );
       if (session!.mode === "live") streamedIds.add(a.id);
@@ -211,6 +244,19 @@ export function AskPage() {
                   </button>
                 ))}
               </div>
+              <div className="lg:col-span-2">
+                <div className="flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] text-ink-3 uppercase">
+                  <HandHeart className="size-3.5 text-brand" /> Try bhai mode · Hinglish, हिंदी, ગુજરાતી
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {BHAI_QUESTIONS.map((q) => (
+                    <button key={q} onClick={() => submit(q)}
+                            className="rounded-full bg-paper px-3.5 py-2 text-left text-[13.5px] text-ink-2 ring-1 ring-line-2 transition-colors hover:text-ink hover:ring-brand">
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-8">
@@ -259,6 +305,25 @@ export function AskPage() {
             >
               <Quote className="size-3.5" /> Verbatim mode {verbatim ? "on" : "off"}
             </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div role="radiogroup" aria-label="Reply tone" className="inline-flex rounded-full p-0.5 ring-1 ring-line-2">
+                {TONES.map(([t, label, hint]) => (
+                  <button key={t} type="button" role="radio" aria-checked={tone === t} title={hint}
+                          onClick={() => { setTone(t); savePref(TONE_KEY, t); }}
+                          className={cx("rounded-full px-2.5 py-0.5 transition-colors",
+                                        tone === t ? (t === "bhai" ? "bg-brand text-paper" : "bg-ink text-paper") : "text-ink-3 hover:text-ink")}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="inline-flex items-center gap-1 text-ink-3" title="Reply language. Wording only: sources, citations and access rules are the same.">
+                <Languages className="size-3.5" />
+                <select value={lang} onChange={(e) => { const v = e.target.value as ReplyLang; setLang(v); savePref(LANG_KEY, v); }}
+                        aria-label="Reply language" className="rounded-md bg-transparent py-0.5 text-ink-2 outline-none hover:text-ink">
+                  {REPLY_LANGS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </label>
+            </div>
             {thread.length > 0 && (
               <span className="truncate text-ink-3">Follow-ups use the previous question as context</span>
             )}

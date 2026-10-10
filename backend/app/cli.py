@@ -124,7 +124,13 @@ SUGGESTED = [  # frontend/src/lib/corpus.ts SUGGESTED_QUESTIONS: the cache keys 
     "What is Prof. Kavita Mehta's salary?",
     "List every employee's salary.",
 ]
+BHAI = [  # frontend/src/pages/AskPage.tsx BHAI_QUESTIONS
+    "Bhai, exam dene ke liye minimum kitni attendance chahiye?",
+    "Bhai yaar, B.Tech ki fees kitni hai is saal?",
+    "ભાઈ, પરીક્ષા માટે ઓછામાં ઓછી કેટલી હાજરી જોઈએ?",
+]
 WARM = {email: SUGGESTED for email in ("aarav.student@atmiya.test", "hod.cse@atmiya.test", "finance@atmiya.test")}
+WARM["aarav.student@atmiya.test"] = SUGGESTED + BHAI
 
 
 async def warm_cache() -> None:

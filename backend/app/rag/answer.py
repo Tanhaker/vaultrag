@@ -25,6 +25,7 @@ from ..ingest.records import inr
 from ..models import UserCtx
 from . import guard, receipts
 from . import sql as sqlmod
+from . import style as stylemod
 from .retrieve import answerable, coverage, hybrid, relevant, terms
 from .verify import verify
 
@@ -191,10 +192,10 @@ async def _record(user: UserCtx, question: str, out: dict, meta: dict, *, key: s
         pass
 
 
-def _finish(user, question, timer, sentences, citations, quarantined, xray, mode) -> dict:
+def _finish(user, question, timer, sentences, citations, quarantined, xray, mode, refusal: str = REFUSAL) -> dict:
     kept = [s for s in sentences if not s.get("removed")]
     refused = not kept
-    final = [{"text": REFUSAL, "cites": []}] if refused else sentences
+    final = [{"text": refusal, "cites": []}] if refused else sentences
     removed = len([s for s in sentences if s.get("removed")])
     return {
         "id": str(uuid.uuid4()), "question": question, "user": user.model_dump(mode="json"),
@@ -214,6 +215,18 @@ async def _egress(user: UserCtx, sentences: list[dict], timer: Timer) -> tuple[l
     else:
         timer.step("dlp", "Egress DLP", "no forbidden canaries or personal identifiers")
     return sentences, report
+
+
+_MARKER = re.compile(r"\s*\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def _split_markers(text: str, cites: list) -> dict:
+    """Models sometimes write "[1]" into the sentence as well as the citations field. Move the markers
+    into the citations, so the verifier never reads a citation number as a figure."""
+    found = [int(n) for m in _MARKER.finditer(text) for n in re.split(r"\s*,\s*", m.group(1))]
+    clean = _MARKER.sub("", text).strip()
+    clean = re.sub(r"\s+([.,;:!?।])", r"", clean)
+    return {"text": clean, "cites": list(dict.fromkeys([int(n) for n in cites] + found))}
 
 
 # --- structured questions --------------------------------------------------------------------
@@ -337,13 +350,15 @@ async def _serve_cached(user: UserCtx, question: str, hit: dict, layer: str, key
 # --- main entry ------------------------------------------------------------------------------
 
 async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: list[dict] | None = None,
-              on_step: StepSink = None, use_cache: bool = True) -> dict:
+              on_step: StepSink = None, use_cache: bool = True, tone: str = "auto", lang: str = "auto") -> dict:
     s = get_settings()
     question = question.strip()[:500]
     history = (history or [])[-3:]
     rewritten = guard.rewrite_followup(question, history)
     effective = rewritten or question
-    key = guard.cache_key(effective, verbatim)
+    st = stylemod.resolve(question, tone, lang)
+    search = stylemod.search_text(effective)       # regional words -> English search terms
+    key = guard.cache_key(effective, verbatim, st.key)
     usage = gemini.begin_usage()
 
     pf = await guard.preflight(user, key)
@@ -363,6 +378,10 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
         timer.step("followup", "Follow-up rewritten", f"“{question}” → “{rewritten}”")
     if not allow_llm:
         timer.step("budget", "Quota guard", f"{why} → verbatim composer")
+    if st.key:
+        how = "matched to your message" if st.detected else "your pick"
+        timer.step("style", "Reply style", f"{st.label} · {how} · wording only, same sources and rules"
+                   + (" · search terms translated" if search != effective else ""))
 
     citations: list[dict] = []
     quarantined: list[dict] = []
@@ -372,8 +391,8 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
     sentences: list[dict] = []
     handled = False
 
-    if sqlmod.is_structured(effective):
-        res = await _sql_answer(user, effective, timer, allow_llm)
+    if sqlmod.is_structured(search):
+        res = await _sql_answer(user, search, timer, allow_llm)
         if res:
             sentences, citation, meta = res
             citations, mode, handled = [citation], "sql", True
@@ -381,14 +400,14 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
             xray = {"candidates": n_rows, "visible": n_rows, "filtered": 0}
 
     if not handled:
-        qvec = await embeddings.embed_query(effective)
+        qvec = await embeddings.embed_query(search)
         timer.step("embed", "Embed question", f"{embeddings.provider()} · {s.embedding_dim}-d" if qvec else "embedding unavailable → lexical only")
         async with secure_session(user) as conn:
-            h = await hybrid(conn, effective, qvec)
+            h = await hybrid(conn, search, qvec)
         timer.step("search", "Hybrid search under RLS",
                    f"HNSW {h['vector']} + BM25 {h['lexical']} authorised · iterative scan")
 
-        qn = len(terms(effective))
+        qn = len(terms(search))
         cands = h["candidates"]
         quarantined_rows = [c for c in cands[:8] if c["injection"] and c["features"]["coverage"] >= 0.25]
         semantic = qvec is not None and embeddings.provider() == "gemini"
@@ -405,14 +424,15 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
             # No model to judge the sources, so only chunks that clearly answer the question are quoted.
             strict = [c for c in usable if answerable(c, semantic)]
             return strict, [{"n": i + 1, "title": c["title"], "text": c["content"]} for i, c in enumerate(strict)], \
-                (extractive(effective, strict) if strict else [])
+                (extractive(search, strict) if strict else [])
 
         if usable:
             if allow_llm:
                 try:
-                    out = await llm.answer(effective, sources, context=history[-1].get("question") if history else None)
+                    out = await llm.answer(effective, sources, context=history[-1].get("question") if history else None,
+                                           style_rules=stylemod.prompt_rules(st))
                     if not out.get("insufficient"):
-                        sentences = [{"text": x["text"].strip(), "cites": [int(n) for n in x.get("citations", [])]}
+                        sentences = [_split_markers(x["text"], x.get("citations", []))
                                      for x in out.get("sentences", []) if x.get("text", "").strip()]
                     timer.step("gen", "Generate with citations", f"{gemini.last_model() or s.llm_model} · {len(sentences)} sentences"
                                + (" · model judged sources insufficient" if out.get("insufficient") else ""))
@@ -454,7 +474,9 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
             xray = {"candidates": total, "visible": h["visible"], "filtered": max(0, total - h["visible"])}
 
     sentences, report = await _egress(user, sentences, timer)
-    out = _finish(user, question, timer, sentences, citations, quarantined, xray, mode)
+    out = _finish(user, question, timer, sentences, citations, quarantined, xray, mode, refusal=stylemod.refusal(st))
+    out["style"] = {"lang": st.lang, "tone": st.tone, "label": st.label, "detected": st.detected,
+                    "greeting": None if out["refused"] else stylemod.greeting(st)}
     usage_meta = usage.as_meta()
     model = usage.calls[-1] if usage.calls else None
     out["rewritten"] = rewritten
@@ -466,7 +488,7 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
     out["receipt"] = receipts.issue(out, pf.kb_version, model)
 
     meta.update({"mode": out["mode"], "refused": out["refused"], "filtered": xray["filtered"], **usage_meta,
-                 "verbatim": verbatim, "followup": bool(rewritten)})
+                 "verbatim": verbatim, "followup": bool(rewritten), "style": st.key or "en-formal"})
     if report["blocked"] or report["redacted"]:
         meta["dlp"] = report
     await _record(user, question, out, meta, key=key, kbv=pf.kb_version if use_cache else None, cache_layer=None)
