@@ -4,6 +4,7 @@ import uuid
 # The suites ask many questions as the same personas in quick succession; the per-user rate limit
 # has its own unit test, so it is lifted here.
 os.environ.setdefault("QUERY_LIMIT_PER_10MIN", "100000")
+os.environ.setdefault("ATTACH_PER_HOUR", "100000")
 
 import psycopg  # noqa: E402
 import pytest  # noqa: E402

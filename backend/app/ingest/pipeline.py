@@ -114,12 +114,15 @@ async def ingest_file(*, tenant: UUID, filename: str, data: bytes, mime: str, cl
         )
         await _insert_chunks(conn, doc_id, chunks, vectors, title)
         # Tripwire tokens found in the text are registered, so the egress filter can tell an
-        # allowed canary (the reader may see this document) from a leaked one.
-        for token in sorted({t for c in chunks for t in CANARY.findall(c.text)}):
-            await conn.execute(
-                "INSERT INTO canaries (token, tenant_id, document_id) VALUES (%s, %s, %s)"
-                " ON CONFLICT (token) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, document_id = EXCLUDED.document_id",
-                (token, tenant, doc_id))
+        # allowed canary (the reader may see this document) from a leaked one. A token that is already
+        # registered keeps its document: an upload that merely contains it (a copied file) must never
+        # re-point it, or the uploader could make a forbidden canary look allowed to themselves.
+        # Private chat attachments register nothing.
+        if allowed_roles:
+            for token in sorted({t for c in chunks for t in CANARY.findall(c.text)}):
+                await conn.execute(
+                    "INSERT INTO canaries (token, tenant_id, document_id) VALUES (%s, %s, %s) ON CONFLICT (token) DO NOTHING",
+                    (token, tenant, doc_id))
         if blob:
             await conn.execute(
                 "INSERT INTO document_blobs (document_id, tenant_id, mime, width, height, data) VALUES (%s, %s, 'image/jpeg', %s, %s, %s)",

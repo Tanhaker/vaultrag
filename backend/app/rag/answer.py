@@ -438,6 +438,7 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
     usage = gemini.begin_usage()
 
     pf = await guard.preflight(user, key)
+    key = pf.key or key
     guard.enforce_rate_limit(pf)
 
     kind = None if doc else chatmod.intent(asked)

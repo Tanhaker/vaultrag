@@ -48,12 +48,21 @@ class Preflight:
     recent_llm: int
     llm_today: int
     cached: dict | None
+    key: str = ""            # the cache key, extended with a fingerprint of the user's private files
 
 
 async def preflight(user: UserCtx, key: str) -> Preflight:
     s = get_settings()
     try:
         async with secure_session(user) as conn:
+            # Private chat attachments change only their owner's answers, so they extend the owner's
+            # cache key instead of bumping kb_version for everyone.
+            p = await (await conn.execute(
+                "SELECT count(*) AS n, coalesce(max(extract(epoch FROM created_at))::bigint, 0) AS t FROM documents"
+                " WHERE owner_id = %s AND allowed_roles = '{}' AND allowed_users = ARRAY[%s]::uuid[]",
+                (user.uid, user.uid))).fetchone()
+            if p["n"]:
+                key = f"{key}:p{p['n']}-{p['t']}"
             row = await (await conn.execute(
                 "SELECT (SELECT version FROM kb_version) AS kbv,"
                 "       (SELECT count(*) FROM audit_log WHERE user_id = %(u)s AND action = 'query'"
@@ -65,9 +74,9 @@ async def preflight(user: UserCtx, key: str) -> Preflight:
                 "           AND kb_version = (SELECT version FROM kb_version)"
                 "           AND created_at > now() - make_interval(hours => %(h)s)) AS cached",
                 {"u": user.uid, "k": key, "h": s.answer_cache_hours})).fetchone()
-        return Preflight(row["kbv"] or 0, row["recent"], row["recent_llm"], row["today"], row["cached"])
+        return Preflight(row["kbv"] or 0, row["recent"], row["recent_llm"], row["today"], row["cached"], key)
     except Exception:
-        return Preflight(None, 0, 0, 0, None)
+        return Preflight(None, 0, 0, 0, None, key)
 
 
 def enforce_rate_limit(pf: Preflight) -> None:

@@ -420,11 +420,15 @@ async def test_chat_attachments_are_private(api):
             kb_after = (await (await conn.execute("SELECT version FROM kb_version LIMIT 1")).fetchone())["version"]
         gone = (await api.req(STUDENT, "DELETE", f"/chat/attach/{doc['id']}")).status_code
         await api.req(STUDENT, "DELETE", f"/chat/attach/{dup['id']}")
+        async with db.writer_session() as conn:  # the copy must not have captured or removed the budget's canary
+            canary_doc = (await (await conn.execute(
+                "SELECT d.title FROM canaries k JOIN documents d ON d.id = k.document_id WHERE k.token = 'CANARY-CSEBUD-7F3A'")).fetchone())
         blob = json.dumps(theirs) + json.dumps(open_q)
         ok = (r.status_code == 201 and not mine["refused"] and "31,500" in json.dumps(mine)
               and theirs["refused"] and open_q["refused"] and "31,500" not in blob
               and not dup.get("duplicate") and dup["title"] == "copy.pdf"
-              and steal == 404 and gone == 204 and kb_after == kb_before)
+              and steal == 404 and gone == 204 and kb_after == kb_before
+              and canary_doc and canary_doc["title"].startswith("CSE Department Budget"))
         return ok, (f"owner answered={not mine['refused']} other refused={theirs['refused']}/{open_q['refused']} "
                     f"dup-hidden={not dup.get('duplicate')} steal={steal} delete={gone} kb {kb_before}->{kb_after}")
     await attack("Read, find or delete another student's chat attachment", "lateral", "Student",
