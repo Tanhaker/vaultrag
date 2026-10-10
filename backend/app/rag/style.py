@@ -18,13 +18,15 @@ _HINGLISH = {
     "batao", "bataiye", "samjha", "samjhao", "samaj", "chahiye", "kar", "karo", "raha", "rahi", "baaki", "bhi", "aur",
     "toh", "yeh", "ye", "woh", "wo", "kuch", "sab", "abhi", "kal", "bhai", "yaar", "na", "haan", "accha", "acha",
     "che", "shu", "chhe", "keva", "ketla", "ketli", "mane", "maru", "tamaru", "kem", "jo", "nathi", "aapo",
+    "kab", "kabb", "ni", "nai", "nahin", "pata", "aata", "ata", "samajh", "bata", "bta", "btao", "kuch", "kch", "hota", "hoti",
 }
 # More romanised filler that is never a search term.
 _FILLER = {
     "dene", "dena", "dete", "lena", "lene", "liye", "lie", "wala", "wale", "wali", "sakta", "sakte", "sakti", "hoga",
     "hogi", "honge", "milega", "milegi", "is", "us", "iska", "uska", "please", "pls", "plz", "bro", "bhaiya", "main",
     "mai", "hoon", "hu", "ho", "tha", "thi", "the", "jaldi", "zara", "ek", "do", "de", "le", "lo", "par", "pe", "wahi",
-    "saal", "mahina", "aaj", "kitni", "kitna", "kitne",
+    "saal", "mahina", "aaj", "kitni", "kitna", "kitne", "kab", "kabb", "ni", "nai", "pata", "aata", "ata", "kuch", "kch",
+    "mujhe", "muje", "mko", "mujhko", "samajh", "hota", "hoti", "bta", "btao",
 }
 # Words that ask for a friendly register.
 _CASUAL = re.compile(r"\b(bhai|bhaiya|bhaii+|yaar|yar|bro|bruh|dost|arre|are yaar|ben|behen|didi|boss)\b|भाई|यार|ભાઈ|દોસ્ત", re.I)
@@ -36,7 +38,8 @@ _GLOSSARY = {
     r"\b(baaki|baki|bakaya|pending|udhaar)\b|बाकी|बकाया|બાકી": "pending due",
     r"\b(kitna|kitne|kitni|ketla|ketli)\b|कितना|कितने|कितनी|કેટલા|કેટલી": "how much",
     r"\b(hazri|haziri|attendance)\b|उपस्थिति|हाजिरी|હાજરી": "attendance",
-    r"\b(pariksha|exam|imtihaan)\b|परीक्षा|પરીક્ષા": "exam",
+    r"\b(pariksha|exam\w*|imtihaan|paper)\b|परीक्षा|પરીક્ષા": "exam examinations",
+    r"\b(kab+|kabhi|kyare)\b|कब|ક્યારે": "when date begin",
     r"\b(niyam|rule|kanoon)\b|नियम|નિયમ": "rule policy",
     r"\b(chhutti|chutti|holiday)\b|छुट्टी|રજા": "holiday leave",
     r"\b(paisa|paise|budget)\b|बजट|બજેટ": "budget",
@@ -65,6 +68,17 @@ class Style:
     def label(self) -> str:
         lang = {"en": "English", "hinglish": "Hinglish", "hi": "हिंदी", "gu": "ગુજરાતી"}[self.lang]
         return f"{'Bhai mode' if self.tone == 'bhai' else 'Formal'} · {lang}"
+
+
+_STRETCH = re.compile(r"(\w)\1{2,}")
+_PUNCT_RUN = re.compile(r"([?!.])\1+")
+
+
+def normalize(question: str) -> str:
+    """Undo chat-style stretching ("exammm kabb haiii????" -> "exam kabb hai?") so words match the
+    vocabulary. Letters repeated three or more times collapse to one; doubled letters stay ("book")."""
+    q = _STRETCH.sub(r"\1", question)
+    return _PUNCT_RUN.sub(r"\1", q).strip()
 
 
 def detect_lang(question: str) -> str:

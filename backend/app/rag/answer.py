@@ -105,13 +105,30 @@ def chunk_view(r: dict) -> dict:
     }
 
 
-def _table_sentence(text: str) -> str:
+def _stem_hits(qt: list[str], text: str) -> int:
+    words = set(re.findall(r"[a-z0-9%]+", text.lower()))
+    def stem(a: str, b: str) -> bool:
+        k = min(5, len(a), len(b))
+        return k >= 3 and a[:k] == b[:k]
+
+    return sum(1 for q in qt if any(stem(q, w) for w in words))
+
+
+def _table_sentence(text: str, qt: list[str] | None = None) -> str:
+    """A table as one readable sentence. When the question names some rows ("exam" -> the three exam
+    rows of a calendar), only those rows are quoted, each with its column names."""
     lines = [l.split(" | ") for l in text.splitlines() if " | " in l]
     if len(lines) < 2:
         return text
-    head, body = lines[0], lines[1:]
-    unit = f" ({head[1]})" if len(head) > 1 else ""
-    return "; ".join(f"{r[0]}: {r[1]}" for r in body if len(r) > 1) + (f"{unit}." if unit else ".")
+    head, body = lines[0], [r for r in lines[1:] if len(r) > 1]
+    if qt:
+        scores = [_stem_hits(qt, " ".join(r)) for r in body]
+        best = max(scores, default=0)
+        if best:
+            body = [r for r, sc in zip(body, scores) if sc == best][:4]
+    if len(head) == 2:
+        return "; ".join(f"{r[0]}: {r[1]}" for r in body) + "."
+    return "; ".join(f"{r[0]}: " + ", ".join(f"{h} {v}" for h, v in zip(head[1:], r[1:])) for r in body) + "."
 
 
 def extractive(question: str, usable: list[dict]) -> list[dict]:
@@ -122,7 +139,7 @@ def extractive(question: str, usable: list[dict]) -> list[dict]:
     for i, c in enumerate(usable[:3]):
         if i and c["score"] < 0.8 * top:
             continue  # only chunks nearly as relevant as the best one contribute
-        text = _table_sentence(c["content"]) if c["modality"] == "table" else c["content"]
+        text = _table_sentence(c["content"], qt) if c["modality"] == "table" else c["content"]
         text = text.removeprefix("Vision caption: ")
         parts = [text] if c["modality"] in ("record", "table") else _SENT.split(text)
         scored = []
@@ -409,10 +426,11 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
               on_step: StepSink = None, use_cache: bool = True, tone: str = "auto", lang: str = "auto") -> dict:
     s = get_settings()
     question = question.strip()[:500]
+    asked = stylemod.normalize(question)          # "exammm kabb haiii????" -> "exam kabb hai?"
     history = (history or [])[-3:]
-    rewritten = guard.rewrite_followup(question, history)
-    effective = rewritten or question
-    st = stylemod.resolve(question, tone, lang)
+    rewritten = guard.rewrite_followup(asked, history)
+    effective = rewritten or asked
+    st = stylemod.resolve(asked, tone, lang)
     unclaimed, claim = guard.strip_identity_claims(effective)
     search = stylemod.search_text(unclaimed or effective)   # regional words -> English search terms
     key = guard.cache_key(effective, verbatim, st.key)
@@ -421,7 +439,7 @@ async def run(user: UserCtx, question: str, *, verbatim: bool = False, history: 
     pf = await guard.preflight(user, key)
     guard.enforce_rate_limit(pf)
 
-    kind = chatmod.intent(question)
+    kind = chatmod.intent(asked)
     if kind:
         return await _small_talk(user, question, kind, st, pf, key, on_step)
 
