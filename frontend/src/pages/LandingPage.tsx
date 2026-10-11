@@ -11,6 +11,7 @@ import { Avatar, ClassBadge, cx } from "../components/ui";
 import { MEASURED } from "../lib/measured";
 import { useCountUp, useInView, useOnScroll, usePageProgress, useReveal, useSectionProgress } from "../lib/motion";
 import { PERSONAS } from "../lib/personas";
+import { LangSwitch } from "../lib/i18n";
 import { useSession } from "../lib/session";
 
 // --- measured numbers (generated from eval/results; never typed by hand) -------------------------
@@ -94,8 +95,9 @@ function TopBar() {
             <a key={id} href={`#${id}`} className={cx("transition-colors", dark ? "hover:text-paper" : "hover:text-ink")}>{l}</a>
           ))}
         </nav>
+        <LangSwitch dark={dark} className="ml-auto" />
         <Link to={session ? "/ask" : "/login"}
-              className={cx("ml-auto inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium transition-colors",
+              className={cx("inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium transition-colors",
                             dark ? "bg-paper text-ink hover:bg-mark" : "bg-brand text-paper hover:bg-brand-2")}>
           {session ? "Open the app" : "Live demo"} <ArrowRight className="size-3.5" />
         </Link>

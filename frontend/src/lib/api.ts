@@ -33,11 +33,53 @@ export async function backendAlive(): Promise<boolean> {
   }
 }
 
-async function call<T>(path: string, s: Session, init: RequestInit = {}): Promise<T> {
+/** Seconds until the session's token expires (negative when already expired). */
+export function tokenSecondsLeft(s: Session): number {
+  try {
+    const exp = JSON.parse(atob(s.token!.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp as number;
+    return exp - Date.now() / 1000;
+  } catch {
+    return 0;
+  }
+}
+
+/** Demo accounts share one password, so an expired demo session is signed in again quietly instead of
+ *  failing ("Invalid or expired token" after the 8-hour token lifetime). The session object is updated
+ *  in place and the app is told, so every later call uses the new token. Real accounts are not touched. */
+const refreshing = new Map<string, Promise<boolean>>();
+export async function refreshSession(s: Session): Promise<boolean> {
+  if (s.mode !== "live" || !personaFor(s.user.email)) return false;
+  const key = s.user.email;
+  if (!refreshing.has(key)) {
+    refreshing.set(key, (async () => {
+      try {
+        const r = await fetch(`${BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: s.user.email, password: DEMO_PASSWORD }),
+        });
+        if (!r.ok) return false;
+        const body = await r.json();
+        s.token = body.access_token;
+        s.user = body.user ?? s.user;
+        window.dispatchEvent(new CustomEvent("defrag:session", { detail: { ...s } }));
+        return true;
+      } catch {
+        return false;
+      } finally {
+        setTimeout(() => refreshing.delete(key), 1000);
+      }
+    })());
+  }
+  return refreshing.get(key)!;
+}
+
+async function call<T>(path: string, s: Session, init: RequestInit = {}, retried = false): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${s.token}`);
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const r = await fetch(`${BASE}${path}`, { ...init, headers });
+  if (r.status === 401 && !retried && (await refreshSession(s))) return call<T>(path, s, init, true);
   if (!r.ok) {
     let msg = `${r.status}`;
     try {
@@ -121,6 +163,7 @@ export async function askStream(question: string, s: Session, opts: AskOptions, 
   } catch {
     return ask(question, s, opts);
   }
+  if (r.status === 401 && (await refreshSession(s))) return askStream(question, s, opts, onStep);
   if (r.status === 429) throw new ApiError(429, "Too many questions in a short time. Wait a minute and try again.");
   if (!r.ok || !r.body) return ask(question, s, opts);
   const reader = r.body.getReader();

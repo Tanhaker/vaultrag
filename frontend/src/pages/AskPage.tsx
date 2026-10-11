@@ -9,6 +9,7 @@ import { ApiError, askStream, attachFile, detachFile, fetchXray, isLive, type Re
 import { SUGGESTED_QUESTIONS } from "../lib/corpus";
 import { ask as demoAsk, recordAudit } from "../lib/engine";
 import { roleLabel } from "../lib/personas";
+import { useUiLang } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import type { Answer, Citation, PipelineStep } from "../lib/types";
 
@@ -102,7 +103,7 @@ function LiveTrace({ question, steps }: { question: string; steps: PipelineStep[
   return (
     <div className="fade-up space-y-3">
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-[18px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[14.5px] text-paper">{question}</div>
+        <div translate="no" className="max-w-[85%] rounded-[18px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[14.5px] text-paper">{question}</div>
       </div>
       <div className="flex gap-3">
         <Mark className="mt-0.5 size-7 shrink-0" />
@@ -164,6 +165,9 @@ export function AskPage() {
   const [tone, setTone] = useState<Tone>(() => loadPref<Tone>(TONE_KEY, "auto", TONES.map((t) => t[0])));
   const [lang, setLang] = useState<ReplyLang>(() => loadPref<ReplyLang>(LANG_KEY, "auto", REPLY_LANGS.map((l) => l[0])));
   const [showOpts, setShowOpts] = useState(false);
+  // With the website in Gujarati or Hindi, "Same as question" answers in that language.
+  const { lang: uiLang } = useUiLang();
+  const replyLang: ReplyLang = lang === "auto" && uiLang !== "en" ? uiLang : lang;
   const [attached, setAttached] = useState<{ id: string; title: string; chunks: number; image: boolean } | null>(null);
   const [focusFile, setFocusFile] = useState(true);
   const [attaching, setAttaching] = useState<string | null>(null);
@@ -200,7 +204,7 @@ export function AskPage() {
       /* already gone */
     }
   }
-  const voice = useVoice(lang, setInput);
+  const voice = useVoice(replyLang, setInput);
   const [params, setParams] = useSearchParams();
   const asked = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -255,7 +259,7 @@ export function AskPage() {
     setPending({ question, steps: [] });
     let a: Answer;
     try {
-      a = await askStream(question, session!, { verbatim, history, tone, lang, doc: attached && focusFile ? attached.id : undefined }, (step) =>
+      a = await askStream(question, session!, { verbatim, history, tone, lang: replyLang, doc: attached && focusFile ? attached.id : undefined }, (step) =>
         setPending((p) => (p ? { ...p, steps: [...p.steps, step] } : p)),
       );
       if (session!.mode === "live") streamedIds.add(a.id);
@@ -357,7 +361,7 @@ export function AskPage() {
               {thread.map((a) => (
                 <div key={a.id} className="fade-up space-y-3">
                   <div className="flex justify-end">
-                    <div className="max-w-[85%] rounded-[18px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[14.5px] text-paper">{a.question}</div>
+                    <div translate="no" className="max-w-[85%] rounded-[18px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[14.5px] text-paper">{a.question}</div>
                   </div>
                   <div className="flex gap-3">
                     <Mark className="mt-0.5 size-7 shrink-0" />

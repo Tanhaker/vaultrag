@@ -4,6 +4,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Logo } from "../components/Layout";
 import { Avatar, Button, ClassBadge, cx } from "../components/ui";
 import { DEMO_PASSWORD, PERSONAS } from "../lib/personas";
+import { LangSwitch } from "../lib/i18n";
 import { useSession } from "../lib/session";
 
 const POINTS = [
@@ -55,6 +56,7 @@ export function LoginPage() {
         <section className="flex flex-col">
           <div className="flex items-center justify-between">
             <Link to="/" aria-label="Back to the story"><Logo /></Link>
+            <LangSwitch className="ml-auto" />
             <Link to="/" className="text-[12px] text-ink-3 hover:text-ink">← The story · PS-01 · Code Carnival</Link>
           </div>
 

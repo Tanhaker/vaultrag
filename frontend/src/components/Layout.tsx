@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { PERSONAS, roleLabel } from "../lib/personas";
+import { LangSwitch } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { Avatar, ClassBadge, cx } from "./ui";
 
@@ -209,6 +210,7 @@ export function Layout() {
           <Link to="/" aria-label="DefRAG story"><Logo className="lg:py-3" /></Link>
           <div className="ml-auto flex items-center gap-4 lg:order-3">
             <BackendStatus />
+            <LangSwitch />
             <button onClick={(e) => toggleTheme(e)} aria-label={dark ? "Switch to light theme" : "Switch to dark theme"} title={dark ? "Light theme" : "Dark theme"}
                     className="grid size-8 place-items-center rounded-lg text-ink-3 transition-colors hover:bg-panel-2 hover:text-ink">
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}

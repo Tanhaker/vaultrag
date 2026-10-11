@@ -3,9 +3,9 @@
 /* Archive-paper palette: warm neutrals from one hue family, one accent (bottle green),
    and muted status colours used only for meaning (classification, deny, warn). */
 @theme {
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist", "Noto Sans Gujarati", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
-  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-display: "Instrument Serif", "Noto Sans Gujarati", "Noto Sans Devanagari", ui-serif, Georgia, serif;
 
   --color-bg: #f2eee5;
   --color-panel: #faf8f3;
@@ -300,3 +300,7 @@ html.theme-dark body::before {
 ::view-transition-new(root) {
   z-index: 2;
 }
+
+/* Gujarati and Devanagari need more line height and no Latin letter-spacing. */
+html[data-ui-lang="gu"] body, html[data-ui-lang="hi"] body { line-height: 1.6; }
+html[data-ui-lang="gu"] .font-display, html[data-ui-lang="hi"] .font-display { letter-spacing: 0; line-height: 1.25; }

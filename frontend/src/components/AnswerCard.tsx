@@ -254,7 +254,7 @@ export function AnswerCard({ answer, live = false, streamed = false, compact = f
       )}
 
       {stepIdx >= answer.steps.length && (
-        <div className={cx("leading-[1.7] text-ink", compact ? "text-[14px]" : "text-[16px]", answer.refused && "text-ink-2")}>
+        <div translate="no" className={cx("leading-[1.7] text-ink", compact ? "text-[14px]" : "text-[16px]", answer.refused && "text-ink-2")}>
           {answer.sentences.map((s, i) => {
             if (s.removed) {
               if (!done) return null;

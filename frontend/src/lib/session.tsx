@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { backendAlive, login as apiLogin, type Session } from "./api";
+import { backendAlive, login as apiLogin, refreshSession, tokenSecondsLeft, type Session } from "./api";
 import { DEMO_PASSWORD } from "./personas";
 
 interface SessionCtx {
@@ -50,6 +50,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", check);
     };
   }, []);
+
+  // A refreshed token (see api.refreshSession) replaces the stored session everywhere.
+  useEffect(() => {
+    const onRefresh = (e: Event) => {
+      const s = (e as CustomEvent<Session>).detail;
+      setSession(s);
+      save(s);
+    };
+    window.addEventListener("defrag:session", onRefresh);
+    return () => window.removeEventListener("defrag:session", onRefresh);
+  }, []);
+
+  // On load, and every 10 minutes, renew a demo token that has expired or will within 30 minutes.
+  useEffect(() => {
+    if (!session || session.mode !== "live") return;
+    const check = () => {
+      if (tokenSecondsLeft(session) < 1800) refreshSession({ ...session });
+    };
+    check();
+    const t = setInterval(check, 600000);
+    return () => clearInterval(t);
+  }, [session]);
 
   const login = useCallback(async (email: string, password: string) => {
     const s = await apiLogin(email, password);

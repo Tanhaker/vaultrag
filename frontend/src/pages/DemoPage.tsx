@@ -5,6 +5,7 @@ import { Logo } from "../components/Layout";
 import { Avatar, Chip, cx } from "../components/ui";
 import { ACTS, SCENARIOS, type Scenario } from "../lib/demo";
 import { personaFor } from "../lib/personas";
+import { LangSwitch } from "../lib/i18n";
 import { useSession } from "../lib/session";
 
 function useRun() {
@@ -83,7 +84,8 @@ export function DemoPage() {
       <header className="sticky top-0 z-30 border-b border-line bg-bg/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
           <Link to="/" aria-label="DefRAG story"><Logo /></Link>
-          <Link to="/" className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-ink-3 hover:text-ink"><ArrowLeft className="size-4" /> Story</Link>
+          <LangSwitch className="ml-auto" />
+          <Link to="/" className="inline-flex items-center gap-1.5 text-[13px] text-ink-3 hover:text-ink"><ArrowLeft className="size-4" /> Story</Link>
           <Link to="/login" className="rounded-full bg-ink px-3.5 py-1.5 text-[13px] text-paper hover:bg-brand">All accounts</Link>
         </div>
       </header>
